@@ -380,3 +380,26 @@ a { color: var(--azul-700); }
     scroll-behavior: auto !important;
   }
 }
+
+/* ---------- Ferramentas (outras calculadoras) ---------- */
+.ferramentas { margin-top: 28px; border-top: 1px solid var(--borda); padding-top: 20px; }
+.ferramentas-titulo { margin: 0 0 12px; font-size: .9375rem; font-weight: 700; color: var(--texto-suave); }
+.ferramentas-lista { display: grid; gap: 10px; }
+.ferramenta {
+  display: flex; align-items: center; gap: 12px; width: 100%;
+  padding: 14px; border: 1px solid var(--borda); border-radius: var(--raio-sm);
+  background: var(--branco); cursor: pointer; text-align: left;
+  font: inherit; color: var(--texto); min-height: 48px;
+  transition: border-color var(--transicao), background var(--transicao);
+}
+.ferramenta:hover { border-color: var(--azul-600); background: var(--azul-50); }
+.ferramenta > .icone { flex: none; width: 22px; height: 22px; color: var(--azul-600); }
+.ferramenta-textos { flex: 1; display: grid; gap: 2px; }
+.ferramenta-nome { font-weight: 700; color: var(--azul-900); }
+.ferramenta-desc { font-size: .8125rem; color: var(--texto-suave); }
+.ferramenta .seta { color: var(--texto-suave); }
+.ferramenta-saida .headline { margin-top: 0; }
+.campo-linha { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+.campo-linha .campo-rotulo { margin: 0; }
+.campo-linha .contador { flex: none; }
+.campo-linha .contador input { flex: none; width: 64px; }

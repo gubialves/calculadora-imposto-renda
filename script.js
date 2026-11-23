@@ -67,6 +67,55 @@ const CONFIG = {
     tetoAnual: 17640
   },
 
+  /* Salário mínimo 2026: R$ 1.621,00.
+     Fonte: Decreto nº 12.797, de 23/12/2025. Conferido em 23/11/2026. */
+  salarioMinimo: 1621,
+
+  /* Tabela MENSAL do IRRF (folha de pagamento), a partir de janeiro/2026.
+     Fonte: Receita Federal – "Tributação 2026" (Lei 15.191/2025).
+     Conferido em 23/11/2026. */
+  tabelaMensal: [
+    { ate: 2428.80, aliquota: 0,     deduzir: 0 },
+    { ate: 2826.65, aliquota: 0.075, deduzir: 182.16 },
+    { ate: 3751.05, aliquota: 0.15,  deduzir: 394.16 },
+    { ate: 4664.68, aliquota: 0.225, deduzir: 675.49 },
+    { ate: Infinity, aliquota: 0.275, deduzir: 908.73 }
+  ],
+
+  /* Regras do IRRF mensal: desconto simplificado de R$ 607,20, dependente de
+     R$ 189,59/mês e a redução da Lei 15.270/2025 (art. 3º-A da Lei 9.250/1995):
+       • rendimento até R$ 5.000 ........ reduz até R$ 312,89 (zera o imposto)
+       • R$ 5.000,01 a R$ 7.350 ........ reduz R$ 978,62 − 0,133145 × rendimento
+       • acima de R$ 7.350 ............. sem redução
+     A redução olha o RENDIMENTO bruto do mês, não a base de cálculo, e nunca
+     passa do imposto apurado. Vale também para o 13º salário.
+     Fonte: Receita Federal – tabela de redução mensal 2026. Conferido em 23/11/2026. */
+  irrfMensal: {
+    descontoSimplificado: 607.20,
+    dependente: 189.59,
+    reducao: {
+      limiteIsencao: 5000,
+      reducaoMaxima: 312.89,
+      constante: 978.62,
+      coeficiente: 0.133145,
+      limiteFinal: 7350
+    }
+  },
+
+  /* INSS 2026 (empregado CLT), alíquotas progressivas com parcela a deduzir.
+     Teto do salário de contribuição: R$ 8.475,55 (contribuição máx. R$ 988,09).
+     Fonte: Portaria Interministerial MPS/MF nº 13, de 09/01/2026.
+     Conferido em 23/11/2026. */
+  inss: {
+    teto: 8475.55,
+    faixas: [
+      { ate: 1621.00,  aliquota: 0.075, deduzir: 0 },
+      { ate: 2902.84,  aliquota: 0.09,  deduzir: 24.32 },
+      { ate: 4354.27,  aliquota: 0.12,  deduzir: 111.40 },
+      { ate: Infinity, aliquota: 0.14,  deduzir: 198.49 }
+    ]
+  },
+
   /* Avisos (não calculados aqui). Lei 15.270/2025: imposto mínimo para quem
      recebe mais de R$ 600 mil por ano e tributação de dividendos. */
   avisoImpostoMinimoAcimaDe: 600000,
@@ -235,6 +284,76 @@ function simular(entrada, cfg = CONFIG) {
 }
 
 
+/**
+ * Contribuição mensal ao INSS de um salário CLT, pela tabela progressiva
+ * de 2026 (parcela a deduzir chega ao mesmo resultado da conta faixa a faixa).
+ * Acima do teto, a contribuição para de crescer.
+ */
+function contribuicaoInss(salarioBruto, cfg = CONFIG) {
+  const base = Math.min(Math.max(0, Number(salarioBruto) || 0), cfg.inss.teto);
+  if (base <= 0) return 0;
+  const f = cfg.inss.faixas.find((x) => base <= x.ate) || cfg.inss.faixas[cfg.inss.faixas.length - 1];
+  return arredondar(Math.max(0, base * f.aliquota - f.deduzir));
+}
+
+/**
+ * Descontos mensais de um salário CLT: INSS + IRRF da folha, com a redução
+ * da Lei 15.270/2025. A base do imposto usa a MELHOR dedução entre o
+ * simplificado (R$ 607,20) e as legais (INSS + dependentes), como faz a
+ * fonte pagadora. A redução olha o salário bruto, não a base.
+ */
+function descontosMensais(salarioBruto, dependentes = 0, cfg = CONFIG) {
+  const bruto = Math.max(0, Number(salarioBruto) || 0);
+  const dep = Math.min(cfg.limites.maxDependentes, Math.max(0, Math.floor(dependentes || 0)));
+  const inss = contribuicaoInss(bruto, cfg);
+  const deducao = arredondar(Math.max(inss + dep * cfg.irrfMensal.dependente, cfg.irrfMensal.descontoSimplificado));
+  const base = arredondar(Math.max(0, bruto - deducao));
+
+  const f = cfg.tabelaMensal.find((x) => base <= x.ate) || cfg.tabelaMensal[cfg.tabelaMensal.length - 1];
+  const impostoTabela = arredondar(Math.max(0, base * f.aliquota - f.deduzir));
+
+  const r = cfg.irrfMensal.reducao;
+  let reducaoBruta = 0;
+  if (bruto <= r.limiteIsencao) reducaoBruta = r.reducaoMaxima;
+  else if (bruto <= r.limiteFinal) reducaoBruta = r.constante - r.coeficiente * bruto;
+  const reducao = arredondar(Math.min(Math.max(0, reducaoBruta), impostoTabela));
+
+  const irrf = arredondar(Math.max(0, impostoTabela - reducao));
+  return {
+    bruto,
+    dependentes: dep,
+    inss,
+    deducao,
+    base,                       // valor sobre o qual o imposto do mês é calculado
+    impostoTabela,
+    reducao,
+    irrf,
+    liquido: arredondar(bruto - inss - irrf)
+  };
+}
+
+/**
+ * Salário reverso: dado o LÍQUIDO mensal desejado, encontra o BRUTO
+ * necessário por busca binária (o líquido só cresce quando o bruto cresce).
+ * Devolve null para valor inválido. O bruto é arredondado para cima, para o
+ * líquido nunca ficar abaixo do pedido.
+ */
+function brutoParaLiquido(liquidoDesejado, dependentes = 0, cfg = CONFIG) {
+  const alvo = Math.max(0, Number(liquidoDesejado) || 0);
+  if (alvo <= 0) return null;
+  let lo = alvo;
+  let hi = Math.max(alvo * 3, cfg.salarioMinimo * 2);
+  let guarda = 0;
+  while (descontosMensais(hi, dependentes, cfg).liquido < alvo && guarda++ < 30) hi *= 2;
+  for (let i = 0; i < 60; i++) {
+    const mid = (lo + hi) / 2;
+    if (descontosMensais(mid, dependentes, cfg).liquido < alvo) lo = mid; else hi = mid;
+  }
+  const bruto = Math.ceil(hi * 100) / 100;
+  return { alvo, bruto, descontos: descontosMensais(bruto, dependentes, cfg) };
+}
+
+
 /* ============================================================================
    3) INTERFACE
    Só roda no navegador (no Node, apenas as funções acima são exportadas).
@@ -351,6 +470,8 @@ function limparCampos() {
 function irParaPasso(n, { foco = true } = {}) {
   estado.passo = n;
   [1, 2, 3].forEach((i) => { $('#passo-' + i).hidden = i !== n; });
+  $$('[data-tela]').forEach((s) => { s.hidden = true; });
+  $('.progresso').hidden = false;
 
   $('#progresso-texto').textContent = `Passo ${n} de 3`;
   $('.barra').setAttribute('aria-valuenow', String(n));
@@ -885,6 +1006,91 @@ async function compartilhar(r) {
   }
 }
 
+/* ---------- Ferramentas (outras calculadoras) ---------- */
+
+/** Mostra a tela de uma ferramenta e esconde o passo a passo principal. */
+function mostrarFerramenta(id) {
+  [1, 2, 3].forEach((i) => { $('#passo-' + i).hidden = true; });
+  $$('[data-tela]').forEach((s) => { s.hidden = s.dataset.tela !== id; });
+  $('.progresso').hidden = true;
+  window.scrollTo({ top: 0, behavior: prefereMenosMovimento() ? 'auto' : 'smooth' });
+  const titulo = $('#tela-' + id + ' h1');
+  if (titulo) titulo.focus({ preventScroll: true });
+}
+
+/** Contador (+/−) genérico usado pelas ferramentas. */
+function ligarContador(input, aoMudar, { max = 99 } = {}) {
+  const definir = (n) => {
+    const valor = Math.min(max, Math.max(0, n));
+    input.value = String(valor);
+    aoMudar(valor);
+  };
+  input.addEventListener('input', () => {
+    const digitos = input.value.replace(/\D/g, '').slice(0, 2);
+    definir(digitos ? parseInt(digitos, 10) : 0);
+  });
+  $$('button', input.closest('.contador')).forEach((b) => {
+    b.addEventListener('click', () => definir((parseInt(input.value, 10) || 0) + Number(b.dataset.passo)));
+  });
+}
+
+function iniciarFerramentas() {
+  $$('[data-ferramenta]').forEach((botao) => {
+    botao.addEventListener('click', () => mostrarFerramenta(botao.dataset.ferramenta));
+  });
+  $$('[data-voltar]').forEach((botao) => {
+    botao.addEventListener('click', () => irParaPasso(1));
+  });
+  iniciarReverso();
+}
+
+/* ---------- Ferramenta: salário reverso ---------- */
+function renderizarReverso(resultado) {
+  const d = resultado.descontos;
+  const linha = (nome, valor, texto) => `
+    <div class="explica-item">
+      <span class="explica-nome">${nome}</span>
+      <span class="explica-valor">${valor}</span>
+      <p>${texto}</p>
+    </div>`;
+  $('#rev-saida').innerHTML = `
+    <section class="bloco" aria-labelledby="h-rev-resultado">
+      <h2 class="bloco-titulo" id="h-rev-resultado">Seu salário bruto precisa ser</h2>
+      <p class="headline"><span class="valor-destaque">${moeda(resultado.bruto)}</span> por mês</p>
+      <div class="explica">
+        ${linha('Salário bruto', moeda(d.bruto), 'É o valor que aparece no contracheque antes de qualquer desconto.')}
+        ${linha('INSS', '− ' + moeda(d.inss), 'Contribuição previdenciária pela tabela progressiva de 2026.')}
+        ${linha('Imposto de renda', d.irrf > 0 ? '− ' + moeda(d.irrf) : 'R$ 0,00', d.reducao > 0
+          ? `A tabela daria ${moeda(d.impostoTabela)}, mas a lei nova de 2025 abate ${moeda(d.reducao)}.`
+          : 'Retido na fonte pela tabela mensal de 2026.')}
+        ${linha('Líquido', moeda(d.liquido), 'O que cai na sua conta todo mês, sem contar outros descontos.')}
+      </div>
+      <p class="dica">Estimativa para salário CLT em 2026, sem dependentes${resultado.descontos.dependentes > 0 ? ' além dos ' + resultado.descontos.dependentes + ' informados' : ''}. Não entram outros descontos do contracheque, como vale-transporte e plano de saúde.</p>
+    </section>`;
+}
+
+function iniciarReverso() {
+  const input = $('#rev-liquido');
+  const erro = $('#rev-erro');
+  let liquido = 0;
+  let dependentes = 0;
+  ligarMascaraMoeda(input, (valor) => {
+    liquido = valor;
+    if (valor > 0) { erro.textContent = ''; erro.hidden = true; }
+  });
+  ligarContador($('#rev-dependentes'), (n) => { dependentes = n; }, { max: CONFIG.limites.maxDependentes });
+  $('#form-reverso').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    if (!(liquido > 0)) {
+      erro.textContent = 'Digite quanto você quer receber de líquido por mês.';
+      erro.hidden = false;
+      input.focus();
+      return;
+    }
+    renderizarReverso(brutoParaLiquido(liquido, dependentes));
+  });
+}
+
 function iniciar() {
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
@@ -896,6 +1102,7 @@ function iniciar() {
   }
   iniciarPasso1();
   iniciarPasso2();
+  iniciarFerramentas();
   atualizarTextosDoPeriodo();
   irParaPasso(1, { foco: false });
   window.scrollTo(0, 0);
@@ -960,6 +1167,39 @@ function rodarTesteEquilibrio() {
   return { cenario: '7) Ponto de equilíbrio', esperado: '~14400', obtido: String(pe), ok: pe !== null && Math.abs(pe - 14400) < 1 };
 }
 
+/* Cenários das funções MENSAIS (INSS, IRRF da folha e salário reverso).
+   Valores esperados calculados à mão com as tabelas oficiais de 2026:
+   8) INSS de R$ 3.000 → 3.000 × 12% − 111,40 = 248,60
+   9) INSS no teto (R$ 10.000) → 8.475,55 × 14% − 198,49 = 988,09
+  10) Salário de R$ 5.000 → IRRF zero (a redução de até 312,89 cobre os 312,89
+      da tabela) e líquido de 5.000 − 501,51 = 4.498,49
+  11) Salário de R$ 6.000 → INSS 641,51; base 5.358,49; imposto 564,85;
+      redução 978,62 − 0,133145 × 6.000 = 179,75; IRRF 385,10;
+      líquido 4.973,39
+  12) Reverso: para tirar R$ 5.000 líquidos, o bruto fica entre R$ 6.000 e
+      R$ 6.100 e o líquido final não fica abaixo do pedido */
+const CENARIOS_MENSAIS = [
+  { nome: '8) INSS de R$ 3.000', obtido: () => contribuicaoInss(3000), esperado: 248.60 },
+  { nome: '9) INSS no teto', obtido: () => contribuicaoInss(10000), esperado: 988.09 },
+  { nome: '10) IRRF zero em R$ 5.000', obtido: () => descontosMensais(5000).irrf, esperado: 0 },
+  { nome: '11) Líquido de R$ 6.000', obtido: () => descontosMensais(6000).liquido, esperado: 4973.39 }
+];
+
+function rodarTestesMensais() {
+  const resultados = CENARIOS_MENSAIS.map((c) => {
+    const obtido = c.obtido();
+    return { cenario: c.nome, esperado: String(c.esperado), obtido: String(obtido), ok: Math.abs(obtido - c.esperado) < 0.015 };
+  });
+  const reverso = brutoParaLiquido(5000);
+  resultados.push({
+    cenario: '12) Reverso de R$ 5.000 líquidos',
+    esperado: 'bruto entre 6000 e 6100 e líquido >= 5000',
+    obtido: `bruto ${reverso.bruto}, líquido ${reverso.descontos.liquido}`,
+    ok: reverso.bruto > 6000 && reverso.bruto < 6100 && reverso.descontos.liquido >= 5000 && reverso.descontos.liquido < 5001
+  });
+  return resultados;
+}
+
 function rodarTestes() {
   const resultados = CENARIOS_TESTE.map((c) => {
     const r = simular(c.entrada);
@@ -968,6 +1208,7 @@ function rodarTestes() {
     return { cenario: c.nome, esperado: `${c.esperado.imposto} (${c.esperado.melhor})`, obtido: `${r.imposto} (${r.melhor})`, ok };
   });
   resultados.push(rodarTesteEquilibrio());
+  resultados.push(...rodarTestesMensais());
   if (typeof console !== 'undefined' && console.table) console.table(resultados);
   return resultados;
 }
@@ -976,7 +1217,9 @@ function rodarTestes() {
 /* ---------- Exportação e início ---------- */
 const CalculaIR = {
   CONFIG, arredondar, paraAnual, indiceDaFaixa, impostoPelaTabela, reducaoDoImposto,
-  descontoSimplificado, deducoesCompletas, calcularOpcao, pontoDeEquilibrio, simular, rodarTestes, CENARIOS_TESTE, gerarImagemResultado
+  descontoSimplificado, deducoesCompletas, calcularOpcao, pontoDeEquilibrio, simular,
+  contribuicaoInss, descontosMensais, brutoParaLiquido,
+  rodarTestes, CENARIOS_TESTE, CENARIOS_MENSAIS, gerarImagemResultado
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = CalculaIR;
