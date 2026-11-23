@@ -886,6 +886,11 @@ async function compartilhar(r) {
 }
 
 function iniciar() {
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => { /* offline fica para a próxima */ });
+    });
+  }
   if (CONFIG.plano.permitirDemo) {
     estado.assinante = new URLSearchParams(window.location.search).get('demo') === '1';
   }
