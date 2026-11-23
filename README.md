@@ -41,7 +41,7 @@ Todos os valores ficam no objeto `CONFIG`, no topo do `script.js`, com a fonte e
 Não precisa instalar nada. Baixe o projeto e abra o `index.html` no navegador.
 
 ```
-git clone https://github.com/gabriel434henrique-cell/calculadora-imposto-renda.git
+git clone //github.com/gubialves/calculadora-imposto-renda.git
 cd calculadora-imposto-renda
 # abra o index.html no navegador
 ```
