@@ -8,7 +8,7 @@ Feito para ser simples: 3 passos, linguagem sem jargão, funciona bem no celular
 
 1. **Quanto você ganha?** Valor mensal ou anual, com máscara de moeda.
 2. **Despesas que abatem imposto** (opcional): dependentes, saúde, educação, previdência (INSS/PGBL) e pensão alimentícia. Dá também para informar o **imposto que você já pagou** (o IRRF do contracheque).
-3. **Resultado:** imposto estimado, **restituição ou imposto a pagar** (quando o IRRF é informado), gráfico de rosca (imposto x o que fica com você), comparativo simplificada x completa com o **ponto de equilíbrio** (a partir de quanto de gasto dedutível a completa passa a compensar), alíquota efetiva e alíquota da faixa.
+3. **Resultado:** imposto estimado, **restituição ou imposto a pagar** (quando o IRRF é informado), gráfico de rosca (imposto x o que fica com você), comparativo simplificada x completa com o **ponto de equilíbrio** (a partir de quanto de gasto dedutível a completa passa a compensar), alíquota efetiva e alíquota da faixa. Dá para **baixar uma imagem do resultado** (formato stories) para compartilhar.
 
 O resultado fica embaçado até o desbloqueio pelo plano mensal (veja [Plano mensal](#plano-mensal)).
 
