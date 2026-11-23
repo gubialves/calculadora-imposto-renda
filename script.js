@@ -174,6 +174,26 @@ function calcularOpcao(rendaAnual, deducao, cfg = CONFIG) {
 }
 
 /**
+ * Ponto de equilíbrio: a dedução a partir da qual a declaração completa
+ * passa a dar imposto MENOR que a simplificada, para a renda informada.
+ * Busca binária sobre calcularOpcao (o imposto só diminui quando a dedução
+ * aumenta). Devolve null quando não faz sentido (imposto já zero).
+ */
+function pontoDeEquilibrio(rendaAnual, cfg = CONFIG) {
+  const renda = Math.max(0, Number(rendaAnual) || 0);
+  if (renda <= 0) return null;
+  const impostoSimplificada = calcularOpcao(renda, descontoSimplificado(renda, cfg), cfg).imposto;
+  if (impostoSimplificada <= 0) return null;
+  const impostoCompleta = (d) => calcularOpcao(renda, d, cfg).imposto;
+  let lo = 0, hi = renda;
+  for (let i = 0; i < 50; i++) {
+    const mid = (lo + hi) / 2;
+    if (impostoCompleta(mid) < impostoSimplificada - 0.005) hi = mid; else lo = mid;
+  }
+  return arredondar(hi);
+}
+
+/**
  * Simulação completa.
  * entrada: { rendaAnual, dependentes, saude, educacao, previdencia, pensao, retido }
  * (todos os valores em reais por ano; dependentes = quantidade;
@@ -576,6 +596,16 @@ function renderizarResultado(manterFoco = false) {
     ? ` Além disso, a lei nova de 2025 tira ${moeda(r.reducao / divisor)} ${unidade} do seu imposto.`
     : '';
 
+  // Ponto de equilíbrio: quando a pessoa ainda está melhor na simplificada,
+  // mostra a partir de quanto de dedução a completa passaria a compensar.
+  let linhaEquilibrio = '';
+  if (!bloqueado && r.melhor !== 'completa') {
+    const pe = pontoDeEquilibrio(r.rendaAnual);
+    if (pe !== null && pe > r.completa.deducao) {
+      linhaEquilibrio = `<p class="dica">Vale guardar recibo? Se os seus gastos que abatem imposto passarem de <strong>${moeda(pe / divisor)}</strong> ${unidade}, a declaração completa passa a dar imposto menor que a simplificada. Saúde entra sem limite; educação tem teto por pessoa.</p>`;
+    }
+  }
+
   const aviso = r.acimaDoImpostoMinimo
     ? `<div class="aviso" role="note"><svg class="icone" aria-hidden="true"><use href="#i-info"/></svg>
          <p style="margin:0">Para rendas acima de ${moeda(CONFIG.avisoImpostoMinimoAcimaDe)} por ano existe um imposto mínimo adicional, e dividendos têm regra própria. Este simulador não calcula essas partes.</p></div>`
@@ -647,6 +677,7 @@ function renderizarResultado(manterFoco = false) {
         ${htmlOpcao('completa', 'Declaração completa', r.completa, r, divisor, textoComp, extraComp)}
       </div>
       ${linhaEconomia}
+      ${linhaEquilibrio}
     </section>
 
     <section class="bloco" aria-labelledby="h-aliq">
@@ -674,6 +705,9 @@ function renderizarResultado(manterFoco = false) {
     <div class="resultado-acoes">
       ${bloqueado ? '' : `<button type="button" class="btn btn-primario" id="btn-compartilhar">
         <svg class="icone" aria-hidden="true"><use href="#i-share"/></svg>Compartilhar resultado
+      </button>
+      <button type="button" class="btn btn-secundario" id="btn-imagem">
+        <svg class="icone" aria-hidden="true"><use href="#i-image"/></svg>Baixar imagem pra stories
       </button>`}
       <button type="button" class="btn btn-secundario" id="btn-refazer">
         <svg class="icone" aria-hidden="true"><use href="#i-refresh"/></svg>Refazer simulação
@@ -704,6 +738,8 @@ function renderizarResultado(manterFoco = false) {
   $('#btn-voltar-3').addEventListener('click', () => irParaPasso(2));
   const btnCompartilhar = $('#btn-compartilhar');
   if (btnCompartilhar) btnCompartilhar.addEventListener('click', () => compartilhar(r));
+  const btnImagem = $('#btn-imagem');
+  if (btnImagem) btnImagem.addEventListener('click', () => baixarImagem(r));
   const btnDesbloquear = $('#btn-desbloquear');
   if (btnDesbloquear) btnDesbloquear.addEventListener('click', desbloquear);
 }
@@ -733,6 +769,98 @@ function refazer() {
   $('#renda').focus();
 }
 
+/** Gera uma imagem PNG (formato stories, 1080x1920) com o resultado, para
+    a pessoa postar onde quiser. Tudo desenhado em canvas, sem enviar nada. */
+function gerarImagemResultado(r) {
+  const W = 1080, H = 1920;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // Fundo azul-escuro com leve degradê
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#1b2f7a');
+  grad.addColorStop(1, '#14235f');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  const centroX = W / 2;
+  const txt = (texto, y, tamanho, cor, peso = 400) => {
+    ctx.fillStyle = cor;
+    ctx.font = `${peso} ${tamanho}px system-ui, -apple-system, 'Segoe UI', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(texto, centroX, y);
+  };
+  const dinheiro = (v) => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Marca
+  txt('CALCULA IR', 150, 44, '#9db4ff', 800);
+
+  // Manchete
+  if (r.imposto <= 0) {
+    txt('Não vou pagar', 340, 96, '#ffffff', 800);
+    txt('imposto de renda', 450, 96, '#ffffff', 800);
+  } else {
+    txt(dinheiro(r.imposto / 12), 380, 130, '#ffffff', 800);
+    txt('de imposto de renda por mês', 470, 52, '#c9d6ff', 400);
+  }
+
+  // Rosca: imposto x o que fica com a pessoa
+  const cx = centroX, cy = 780, raio = 210, grosso = 64;
+  const pct = r.rendaAnual > 0 ? r.imposto / r.rendaAnual : 0;
+  ctx.lineWidth = grosso;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#17a05a';
+  ctx.beginPath(); ctx.arc(cx, cy, raio, 0, 2 * Math.PI); ctx.stroke();
+  if (pct > 0) {
+    ctx.strokeStyle = '#e0474f';
+    ctx.beginPath(); ctx.arc(cx, cy, raio, -Math.PI / 2, -Math.PI / 2 + pct * 2 * Math.PI); ctx.stroke();
+  }
+  txt((pct * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%', cy + 6, 92, '#ffffff', 800);
+  txt('vai para o imposto', cy + 62, 38, '#c9d6ff');
+
+  // Fatos principais
+  let y = 1180;
+  const linha = (rotulo, valor, corValor = '#ffffff') => {
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#9db4ff'; ctx.font = "400 40px system-ui, -apple-system, 'Segoe UI', sans-serif";
+    ctx.fillText(rotulo, 120, y);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = corValor; ctx.font = "800 46px system-ui, -apple-system, 'Segoe UI', sans-serif";
+    ctx.fillText(valor, W - 120, y);
+    y += 88;
+  };
+  linha('Fica comigo', dinheiro(r.sobra / 12) + '/mês', '#5be3a1');
+  if (r.retido > 0 && r.saldo > 0.005) linha('Restituição', dinheiro(r.saldo) + '/ano', '#5be3a1');
+  if (r.retido > 0 && r.saldo < -0.005) linha('Ainda vou pagar', dinheiro(-r.saldo) + '/ano', '#ff9aa0');
+  if (r.melhor !== 'empate') {
+    linha('Melhor declaração', r.melhor === 'completa' ? 'Completa' : 'Simplificada', '#f5b82e');
+  }
+
+  // Rodapé com o endereço do site (encolhe a fonte se for comprido)
+  let endereco = (window.location.host + window.location.pathname).replace(/^www\./, '').replace(/\/$/, '');
+  if (endereco.length > 34) endereco = window.location.host.replace(/^www\./, '');
+  txt('Simule o seu em menos de 1 minuto:', H - 160, 38, '#c9d6ff');
+  txt(endereco, H - 100, endereco.length > 26 ? 34 : 46, '#ffffff', 800);
+
+  return canvas;
+}
+
+/** Baixa a imagem do resultado como PNG. */
+function baixarImagem(r) {
+  const canvas = gerarImagemResultado(r);
+  canvas.toBlob((blob) => {
+    if (!blob) { avisoRapido('Não consegui gerar a imagem. Tente de novo.'); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'meu-imposto-de-renda.png';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    avisoRapido('Imagem baixada! É só postar nos stories.');
+  }, 'image/png');
+}
+
 async function compartilhar(r) {
   // Compartilha só o resultado, sem a renda informada.
   const textoImposto = r.imposto <= 0
@@ -758,6 +886,11 @@ async function compartilhar(r) {
 }
 
 function iniciar() {
+  if ('serviceWorker' in navigator) {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register('sw.js').catch(() => { /* offline fica para a próxima */ });
+    });
+  }
   if (CONFIG.plano.permitirDemo) {
     estado.assinante = new URLSearchParams(window.location.search).get('demo') === '1';
   }
@@ -770,7 +903,7 @@ function iniciar() {
 
 
 /* ============================================================================
-   4) TESTES – 6 cenários com resultado esperado
+   4) TESTES – 7 cenários com resultado esperado
    Valores esperados calculados à mão a partir da tabela em CONFIG.
    Rode no navegador: abra o console e digite  CalculaIR.rodarTestes()
    Ou no Node:  node -e "console.log(require('./script.js').rodarTestes())"
@@ -820,6 +953,13 @@ const CENARIOS_TESTE = [
   }
 ];
 
+function rodarTesteEquilibrio() {
+  // Com R$ 72.000/ano a simplificada abate R$ 14.400 (20%). A completa passa
+  // a vencer logo acima desse valor (base cai na faixa de 27,5%).
+  const pe = pontoDeEquilibrio(72000);
+  return { cenario: '7) Ponto de equilíbrio', esperado: '~14400', obtido: String(pe), ok: pe !== null && Math.abs(pe - 14400) < 1 };
+}
+
 function rodarTestes() {
   const resultados = CENARIOS_TESTE.map((c) => {
     const r = simular(c.entrada);
@@ -827,6 +967,7 @@ function rodarTestes() {
       && (c.esperado.saldo === undefined || Math.abs(r.saldo - c.esperado.saldo) < 0.015);
     return { cenario: c.nome, esperado: `${c.esperado.imposto} (${c.esperado.melhor})`, obtido: `${r.imposto} (${r.melhor})`, ok };
   });
+  resultados.push(rodarTesteEquilibrio());
   if (typeof console !== 'undefined' && console.table) console.table(resultados);
   return resultados;
 }
@@ -835,7 +976,7 @@ function rodarTestes() {
 /* ---------- Exportação e início ---------- */
 const CalculaIR = {
   CONFIG, arredondar, paraAnual, indiceDaFaixa, impostoPelaTabela, reducaoDoImposto,
-  descontoSimplificado, deducoesCompletas, calcularOpcao, simular, rodarTestes, CENARIOS_TESTE
+  descontoSimplificado, deducoesCompletas, calcularOpcao, pontoDeEquilibrio, simular, rodarTestes, CENARIOS_TESTE, gerarImagemResultado
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = CalculaIR;
