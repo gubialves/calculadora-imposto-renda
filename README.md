@@ -7,8 +7,8 @@ Feito para ser simples: 3 passos, linguagem sem jargão, funciona bem no celular
 ## Como funciona
 
 1. **Quanto você ganha?** Valor mensal ou anual, com máscara de moeda.
-2. **Despesas que abatem imposto** (opcional): dependentes, saúde, educação, previdência (INSS/PGBL) e pensão alimentícia.
-3. **Resultado:** imposto estimado, gráfico de rosca (imposto x o que fica com você), comparativo simplificada x completa, alíquota efetiva e alíquota da faixa.
+2. **Despesas que abatem imposto** (opcional): dependentes, saúde, educação, previdência (INSS/PGBL) e pensão alimentícia. Dá também para informar o **imposto que você já pagou** (o IRRF do contracheque).
+3. **Resultado:** imposto estimado, **restituição ou imposto a pagar** (quando o IRRF é informado), gráfico de rosca (imposto x o que fica com você), comparativo simplificada x completa, alíquota efetiva e alíquota da faixa.
 
 O resultado fica embaçado até o desbloqueio pelo plano mensal (veja [Plano mensal](#plano-mensal)).
 
@@ -83,6 +83,7 @@ Cenários cobertos (valores calculados à mão a partir da tabela):
 | 3 | Renda alta: R$ 15.000/mês | R$ 33.744,34 | simplificada |
 | 4 | Com dependentes: R$ 10.000/mês, 2 dependentes | R$ 17.244,34 | simplificada |
 | 5 | Com deduções: R$ 12.000/mês, 2 dependentes, saúde, educação e INSS | R$ 16.255,81 | completa |
+| 6 | Restituição: R$ 6.000/mês com R$ 400/mês já retidos | R$ 3.387,01 | simplificada (restituição de R$ 1.412,99) |
 
 ## Plano mensal
 

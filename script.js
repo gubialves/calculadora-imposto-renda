@@ -175,11 +175,13 @@ function calcularOpcao(rendaAnual, deducao, cfg = CONFIG) {
 
 /**
  * Simulação completa.
- * entrada: { rendaAnual, dependentes, saude, educacao, previdencia, pensao }
- * (todos os valores em reais por ano; dependentes = quantidade)
+ * entrada: { rendaAnual, dependentes, saude, educacao, previdencia, pensao, retido }
+ * (todos os valores em reais por ano; dependentes = quantidade;
+ *  retido = imposto já descontado na fonte, o IRRF do contracheque)
  */
 function simular(entrada, cfg = CONFIG) {
   const rendaAnual = Math.max(0, Number(entrada.rendaAnual) || 0);
+  const retido = Math.max(0, Number(entrada.retido) || 0);
   const ded = deducoesCompletas(entrada, cfg);
 
   const simplificada = calcularOpcao(rendaAnual, descontoSimplificado(rendaAnual, cfg), cfg);
@@ -195,6 +197,8 @@ function simular(entrada, cfg = CONFIG) {
 
   return {
     rendaAnual,
+    retido,                                 // imposto já descontado na fonte (IRRF), por ano
+    saldo: arredondar(retido - imposto),    // positivo: restituição a receber; negativo: imposto a pagar
     simplificada,
     completa,
     deducoes: ded,
@@ -233,7 +237,8 @@ const estado = {
   saude: 0,
   educacao: 0,
   previdencia: 0,
-  pensao: 0
+  pensao: 0,
+  irrf: 0            // imposto já retido na fonte (não é dedução: é imposto já pago)
 };
 
 /** Converte o estado (mensal ou anual) na entrada anual da função `simular`. */
@@ -245,7 +250,8 @@ function calcularDoEstado() {
     saude: estado.saude * f,
     educacao: estado.educacao * f,
     previdencia: estado.previdencia * f,
-    pensao: estado.pensao * f
+    pensao: estado.pensao * f,
+    retido: estado.irrf * f
   });
 }
 
@@ -277,6 +283,14 @@ const CAMPOS_DESPESAS = [
     ajuda: 'Pensão alimentícia que você paga por determinação da Justiça (ou por escritura pública). Acordos informais, sem documento oficial, não entram.'
   }
 ];
+
+/* Campo separado das deduções: imposto que JÁ FOI PAGO no ano (IRRF).
+   Com ele o resultado mostra se sobra restituição ou se falta pagar. */
+const CAMPO_IRRF = {
+  id: 'irrf', tipo: 'moeda', icone: 'i-receipt', rotulo: 'Imposto que você já pagou',
+  dica: 'Opcional. É o IRRF que já saiu do seu contracheque.',
+  ajuda: 'É o imposto de renda que já foi descontado do seu salário ao longo do ano. No contracheque aparece como "IRRF". Some os meses, ou informe uma média, na mesma unidade (por mês ou por ano) usada nas despesas acima. Com esse valor a gente estima se você vai receber restituição ou ainda vai pagar imposto no acerto anual.'
+};
 
 /* ---------- Utilitários de tela ---------- */
 const $ = (seletor, raiz = document) => raiz.querySelector(seletor);
@@ -426,7 +440,7 @@ function htmlCampo(c) {
 
 function iniciarPasso2() {
   const area = $('#campos-despesas');
-  area.innerHTML = CAMPOS_DESPESAS.map(htmlCampo).join('');
+  area.innerHTML = CAMPOS_DESPESAS.map(htmlCampo).join('') + htmlCampo(CAMPO_IRRF);
 
   // Botões "?" abrem e fecham a explicação
   area.addEventListener('click', (ev) => {
@@ -444,6 +458,12 @@ function iniciarPasso2() {
       estado[c.id] = valor;
       renderizarPreviasSuave();
     });
+  });
+
+  // Imposto já retido (IRRF): campo próprio, fora das deduções
+  ligarMascaraMoeda($('#f-' + CAMPO_IRRF.id), (valor) => {
+    estado.irrf = valor;
+    renderizarPreviasSuave();
   });
 
   // Contador de dependentes
@@ -466,7 +486,10 @@ function iniciarPasso2() {
   $('#btn-voltar-2').addEventListener('click', () => irParaPasso(1));
   $('#btn-pular').addEventListener('click', () => {
     Object.assign(estado, { dependentes: 0, saude: 0, educacao: 0, previdencia: 0, pensao: 0 });
-    $$('input', area).forEach((i) => { i.value = i.classList.contains('contador-valor') ? '0' : ''; });
+    $$('input', area).forEach((i) => {
+      if (i.id === 'f-' + CAMPO_IRRF.id) return; // o IRRF não é dedução
+      i.value = i.classList.contains('contador-valor') ? '0' : '';
+    });
     irParaPasso(3);
   });
 }
@@ -558,6 +581,29 @@ function renderizarResultado(manterFoco = false) {
          <p style="margin:0">Para rendas acima de ${moeda(CONFIG.avisoImpostoMinimoAcimaDe)} por ano existe um imposto mínimo adicional, e dividendos têm regra própria. Este simulador não calcula essas partes.</p></div>`
     : '';
 
+  // Restituição ou imposto a pagar (só quando a pessoa informou o IRRF).
+  // Valores sempre ANUAIS: a restituição é um evento do acerto do ano.
+  let blocoRestituicao = '';
+  if (!bloqueado && r.retido > 0) {
+    let linha, explicacao;
+    if (r.saldo > 0.005) {
+      linha = `Você deve <strong class="verde-texto">receber de volta cerca de ${moeda(r.saldo)}</strong> por ano`;
+      explicacao = `Já descontaram ${moeda(r.retido)} do seu salário, mas o imposto devido é ${moeda(r.imposto)}. A diferença volta para você na restituição, depois que a declaração for enviada e processada.`;
+    } else if (r.saldo < -0.005) {
+      linha = `Você ainda vai <strong class="vermelho-texto">pagar cerca de ${moeda(-r.saldo)}</strong> no acerto do ano`;
+      explicacao = `Já descontaram ${moeda(r.retido)} do seu salário, mas o imposto devido é ${moeda(r.imposto)}. A diferença é paga na declaração (dá para parcelar).`;
+    } else {
+      linha = 'Nem restituição nem imposto a pagar';
+      explicacao = `O que já descontaram do seu salário (${moeda(r.retido)}) cobre quase exatamente o imposto devido (${moeda(r.imposto)}).`;
+    }
+    blocoRestituicao = `
+    <section class="bloco bloco-restituicao" aria-labelledby="h-rest">
+      <h2 class="bloco-titulo" id="h-rest">Restituição ou imposto a pagar</h2>
+      <p class="restituicao-linha">${linha}</p>
+      <p class="dica">${explicacao}</p>
+    </section>`;
+  }
+
   const fieldsetVisao = bloqueado ? '' : `
     <fieldset class="periodo visao">
       <legend class="sr-only">Mostrar valores por</legend>
@@ -580,6 +626,7 @@ function renderizarResultado(manterFoco = false) {
     <div class="resultado-conteudo${bloqueado ? ' bloqueado' : ''}"${bloqueado ? ' aria-hidden="true" inert' : ''}>
     ${titulo}
     ${fieldsetVisao}
+    ${blocoRestituicao}
 
     <section class="bloco" aria-labelledby="h-rosca">
       <h2 class="bloco-titulo" id="h-rosca">Para onde vai o seu dinheiro</h2>
@@ -674,7 +721,7 @@ function desbloquear() {
 function refazer() {
   Object.assign(estado, {
     periodo: 'mensal', visao: 'mensal', renda: 0,
-    dependentes: 0, saude: 0, educacao: 0, previdencia: 0, pensao: 0
+    dependentes: 0, saude: 0, educacao: 0, previdencia: 0, pensao: 0, irrf: 0
   });
   limparCampos();
   $('input[name="periodo"][value="mensal"]').checked = true;
@@ -723,7 +770,7 @@ function iniciar() {
 
 
 /* ============================================================================
-   4) TESTES – 5 cenários com resultado esperado
+   4) TESTES – 6 cenários com resultado esperado
    Valores esperados calculados à mão a partir da tabela em CONFIG.
    Rode no navegador: abra o console e digite  CalculaIR.rodarTestes()
    Ou no Node:  node -e "console.log(require('./script.js').rodarTestes())"
@@ -765,13 +812,19 @@ const CENARIOS_TESTE = [
     nome: '5) Com deduções',
     entrada: { rendaAnual: 144000, dependentes: 2, saude: 18000, educacao: 12000, previdencia: 12000 },
     esperado: { imposto: 16255.81, melhor: 'completa' }
+  },
+  {
+    nome: '6) Restituição',
+    entrada: { rendaAnual: 72000, retido: 4800 },
+    esperado: { imposto: 3387.01, melhor: 'simplificada', saldo: 1412.99 }
   }
 ];
 
 function rodarTestes() {
   const resultados = CENARIOS_TESTE.map((c) => {
     const r = simular(c.entrada);
-    const ok = Math.abs(r.imposto - c.esperado.imposto) < 0.015 && r.melhor === c.esperado.melhor;
+    const ok = Math.abs(r.imposto - c.esperado.imposto) < 0.015 && r.melhor === c.esperado.melhor
+      && (c.esperado.saldo === undefined || Math.abs(r.saldo - c.esperado.saldo) < 0.015);
     return { cenario: c.nome, esperado: `${c.esperado.imposto} (${c.esperado.melhor})`, obtido: `${r.imposto} (${r.melhor})`, ok };
   });
   if (typeof console !== 'undefined' && console.table) console.table(resultados);
