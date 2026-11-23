@@ -12,6 +12,12 @@ Feito para ser simples: 3 passos, linguagem sem jargão, funciona bem no celular
 
 O resultado fica embaçado até o desbloqueio pelo plano mensal (veja [Plano mensal](#plano-mensal)).
 
+## Outras calculadoras (grátis, sem desbloqueio)
+
+Na primeira tela, em "Outras calculadoras grátis":
+
+- **Salário reverso:** você diz quanto quer tirar de líquido por mês e o site calcula o salário bruto necessário, já descontando INSS (tabela 2026) e IRRF da folha (com a redução da Lei 15.270/2025, que zera o imposto até R$ 5.000).
+
 ## Regras de cálculo
 
 Ano-calendário **2026** (declaração de 2027), conforme a Receita Federal e a Lei 15.270/2025.
