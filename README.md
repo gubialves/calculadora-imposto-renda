@@ -17,6 +17,7 @@ O resultado fica embaçado até o desbloqueio pelo plano mensal (veja [Plano men
 Na primeira tela, em "Outras calculadoras grátis":
 
 - **Salário reverso:** você diz quanto quer tirar de líquido por mês e o site calcula o salário bruto necessário, já descontando INSS (tabela 2026) e IRRF da folha (com a redução da Lei 15.270/2025, que zera o imposto até R$ 5.000).
+- **13º salário e férias:** mostra quanto cai de INSS e IRRF no 13º (tributação exclusiva, com as duas parcelas) e no mês das férias (salário + 1/3 constitucional), comparando com um mês normal.
 
 ## Regras de cálculo
 

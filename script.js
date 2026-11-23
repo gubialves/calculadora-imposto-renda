@@ -354,6 +354,75 @@ function brutoParaLiquido(liquidoDesejado, dependentes = 0, cfg = CONFIG) {
 }
 
 
+/**
+ * 13º salário: tributação EXCLUSIVA na fonte. O INSS incide sobre o 13º
+ * separado do salário do mês, e a base do imposto é o 13º bruto menos INSS
+ * e dependentes (sem desconto simplificado). A redução da Lei 15.270/2025
+ * também vale para o 13º (art. 3º-A, §3º, da Lei 9.250/1995), olhando o
+ * valor bruto do 13º. Devolve também as duas parcelas: a 1ª (paga até
+ * 30/11) é metade do bruto, sem descontos; os descontos caem todos na 2ª.
+ */
+function decimoTerceiro(salarioBruto, dependentes = 0, cfg = CONFIG) {
+  const bruto = Math.max(0, Number(salarioBruto) || 0);
+  const dep = Math.min(cfg.limites.maxDependentes, Math.max(0, Math.floor(dependentes || 0)));
+  const inss = contribuicaoInss(bruto, cfg);
+  const base = arredondar(Math.max(0, bruto - inss - dep * cfg.irrfMensal.dependente));
+
+  const f = cfg.tabelaMensal.find((x) => base <= x.ate) || cfg.tabelaMensal[cfg.tabelaMensal.length - 1];
+  const impostoTabela = arredondar(Math.max(0, base * f.aliquota - f.deduzir));
+
+  const r = cfg.irrfMensal.reducao;
+  let reducaoBruta = 0;
+  if (bruto <= r.limiteIsencao) reducaoBruta = r.reducaoMaxima;
+  else if (bruto <= r.limiteFinal) reducaoBruta = r.constante - r.coeficiente * bruto;
+  const reducao = arredondar(Math.min(Math.max(0, reducaoBruta), impostoTabela));
+
+  const irrf = arredondar(Math.max(0, impostoTabela - reducao));
+  const liquido = arredondar(bruto - inss - irrf);
+  const primeiraParcela = arredondar(bruto / 2);
+  return {
+    bruto,
+    inss,
+    base,
+    impostoTabela,
+    reducao,
+    irrf,
+    liquido,
+    primeiraParcela,
+    segundaParcela: arredondar(liquido - primeiraParcela)
+  };
+}
+
+/**
+ * Férias: no mês das férias entra o salário + 1/3 constitucional, tudo
+ * tributado junto (INSS e IRRF caem sobre o total). Compara o mês de férias
+ * com um mês normal e devolve quanto os descontos aumentam e quanto a mais
+ * cai na conta. (A escolha de 30, 20 ou 10 dias muda a composição, mas o
+ * total do mês é sempre salário + 1/3 sobre o período gozado; aqui usamos
+ * o gozo integral, que é o caso mais comum.)
+ */
+function calcularFerias(salarioBruto, dependentes = 0, cfg = CONFIG) {
+  const salario = Math.max(0, Number(salarioBruto) || 0);
+  const terco = arredondar(salario / 3);
+  const mesNormal = descontosMensais(salario, dependentes, cfg);
+  const mesFerias = descontosMensais(salario + terco, dependentes, cfg);
+  const descontoExtra = arredondar((mesFerias.inss + mesFerias.irrf) - (mesNormal.inss + mesNormal.irrf));
+  return {
+    salario,
+    terco,
+    bruto: mesFerias.bruto,                    // salário + 1/3
+    inss: mesFerias.inss,
+    irrf: mesFerias.irrf,
+    reducao: mesFerias.reducao,
+    impostoTabela: mesFerias.impostoTabela,
+    liquido: mesFerias.liquido,
+    liquidoMesNormal: mesNormal.liquido,
+    descontoExtra,
+    aMaisQueMesNormal: arredondar(mesFerias.liquido - mesNormal.liquido)
+  };
+}
+
+
 /* ============================================================================
    3) INTERFACE
    Só roda no navegador (no Node, apenas as funções acima são exportadas).
@@ -1042,6 +1111,84 @@ function iniciarFerramentas() {
     botao.addEventListener('click', () => irParaPasso(1));
   });
   iniciarReverso();
+  iniciarDecimoFerias();
+}
+
+/* ---------- Ferramenta: 13º salário e férias ---------- */
+function linhaExplica(nome, valor, texto) {
+  return `
+    <div class="explica-item">
+      <span class="explica-nome">${nome}</span>
+      <span class="explica-valor">${valor}</span>
+      <p>${texto}</p>
+    </div>`;
+}
+
+function renderizarDecimoFerias(salario, dependentes) {
+  const d13 = decimoTerceiro(salario, dependentes);
+  const fer = calcularFerias(salario, dependentes);
+
+  const textoIrrf13 = d13.irrf > 0
+    ? `− ${moeda(d13.irrf)}`
+    : 'R$ 0,00';
+  const detalheIrrf13 = d13.irrf > 0
+    ? (d13.reducao > 0
+      ? `A tabela daria ${moeda(d13.impostoTabela)}, mas a lei nova de 2025 abate ${moeda(d13.reducao)}.`
+      : 'Imposto exclusivo na fonte: não entra na declaração do ano.')
+    : (d13.impostoTabela > 0
+      ? `A tabela daria ${moeda(d13.impostoTabela)}, mas a lei nova de 2025 zera o imposto do 13º até R$ 5.000.`
+      : 'Com esse valor, o 13º fica na faixa em que a tabela não cobra imposto.');
+
+  $('#df-saida').innerHTML = `
+    <section class="bloco" aria-labelledby="h-d13">
+      <h2 class="bloco-titulo" id="h-d13">Seu 13º salário</h2>
+      <p class="headline">Cai na conta <span class="valor-destaque verde">${moeda(d13.liquido)}</span> de 13º líquido</p>
+      <div class="explica">
+        ${linhaExplica('13º bruto', moeda(d13.bruto), 'Igual a um salário inteiro, para quem trabalhou o ano todo na empresa.')}
+        ${linhaExplica('INSS', '− ' + moeda(d13.inss), 'Descontado do 13º separado do salário do mês, pela tabela de 2026.')}
+        ${linhaExplica('Imposto de renda', textoIrrf13, detalheIrrf13)}
+      </div>
+      <div class="explica">
+        ${linhaExplica('1ª parcela (até 30/11)', moeda(d13.primeiraParcela), 'Metade do valor bruto, sem nenhum desconto.')}
+        ${linhaExplica('2ª parcela (até 20/12)', moeda(d13.segundaParcela), 'O restante, já com INSS e imposto descontados.')}
+      </div>
+    </section>
+
+    <section class="bloco" aria-labelledby="h-ferias">
+      <h2 class="bloco-titulo" id="h-ferias">Seu mês de férias</h2>
+      <p class="headline">Entra <span class="valor-destaque verde">${moeda(fer.aMaisQueMesNormal)}</span> a mais que um mês normal</p>
+      <div class="explica">
+        ${linhaExplica('Total do mês', moeda(fer.bruto), 'Salário + 1/3 constitucional de férias, pagos até 2 dias antes do início.')}
+        ${linhaExplica('INSS', '− ' + moeda(fer.inss), 'Incide sobre o total do mês (salário + 1/3).')}
+        ${linhaExplica('Imposto de renda', fer.irrf > 0 ? '− ' + moeda(fer.irrf) : 'R$ 0,00', fer.reducao > 0
+          ? `A tabela daria ${moeda(fer.impostoTabela)}, mas a lei nova de 2025 abate ${moeda(fer.reducao)}.`
+          : 'Calculado sobre o total do mês, pela tabela de 2026.')}
+        ${linhaExplica('Líquido do mês', moeda(fer.liquido), `Um mês normal fecha com ${moeda(fer.liquidoMesNormal)}; nas férias os descontos sobem ${moeda(fer.descontoExtra)}.`)}
+      </div>
+      <p class="dica">Conta com o gozo integral das férias. Vender 1/3 (abono pecuniário) muda os valores: o abono e o terço sobre ele não têm descontos.</p>
+    </section>`;
+}
+
+function iniciarDecimoFerias() {
+  const input = $('#df-salario');
+  const erro = $('#df-erro');
+  let salario = 0;
+  let dependentes = 0;
+  ligarMascaraMoeda(input, (valor) => {
+    salario = valor;
+    if (valor > 0) { erro.textContent = ''; erro.hidden = true; }
+  });
+  ligarContador($('#df-dependentes'), (n) => { dependentes = n; }, { max: CONFIG.limites.maxDependentes });
+  $('#form-decimo').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    if (!(salario > 0)) {
+      erro.textContent = 'Digite seu salário bruto para calcular.';
+      erro.hidden = false;
+      input.focus();
+      return;
+    }
+    renderizarDecimoFerias(salario, dependentes);
+  });
 }
 
 /* ---------- Ferramenta: salário reverso ---------- */
@@ -1182,7 +1329,17 @@ const CENARIOS_MENSAIS = [
   { nome: '8) INSS de R$ 3.000', obtido: () => contribuicaoInss(3000), esperado: 248.60 },
   { nome: '9) INSS no teto', obtido: () => contribuicaoInss(10000), esperado: 988.09 },
   { nome: '10) IRRF zero em R$ 5.000', obtido: () => descontosMensais(5000).irrf, esperado: 0 },
-  { nome: '11) Líquido de R$ 6.000', obtido: () => descontosMensais(6000).liquido, esperado: 4973.39 }
+  { nome: '11) Líquido de R$ 6.000', obtido: () => descontosMensais(6000).liquido, esperado: 4973.39 },
+  /* 13º de R$ 4.500: INSS 431,51; base 4.068,49; tabela 239,92, zerada pela
+     redução (13º ≤ 5.000). Líquido = 4.068,49. */
+  { nome: '12) 13º de R$ 4.500 sem IRRF', obtido: () => decimoTerceiro(4500).liquido, esperado: 4068.49 },
+  /* 13º de R$ 8.000: INSS 921,51; base 7.078,49; imposto 1.037,85, sem
+     redução (acima de 7.350). Líquido = 8.000 − 921,51 − 1.037,85 = 6.040,64. */
+  { nome: '13) 13º de R$ 8.000', obtido: () => decimoTerceiro(8000).liquido, esperado: 6040.64 },
+  /* Férias de R$ 4.500: mês fecha com salário + 1/3 = 6.000 (líquido
+     4.973,39) e os descontos sobem 595,10 em relação ao mês normal. */
+  { nome: '14) Férias de R$ 4.500', obtido: () => calcularFerias(4500).liquido, esperado: 4973.39 },
+  { nome: '15) Desconto extra das férias', obtido: () => calcularFerias(4500).descontoExtra, esperado: 595.10 }
 ];
 
 function rodarTestesMensais() {
@@ -1192,7 +1349,7 @@ function rodarTestesMensais() {
   });
   const reverso = brutoParaLiquido(5000);
   resultados.push({
-    cenario: '12) Reverso de R$ 5.000 líquidos',
+    cenario: '16) Reverso de R$ 5.000 líquidos',
     esperado: 'bruto entre 6000 e 6100 e líquido >= 5000',
     obtido: `bruto ${reverso.bruto}, líquido ${reverso.descontos.liquido}`,
     ok: reverso.bruto > 6000 && reverso.bruto < 6100 && reverso.descontos.liquido >= 5000 && reverso.descontos.liquido < 5001
@@ -1218,7 +1375,7 @@ function rodarTestes() {
 const CalculaIR = {
   CONFIG, arredondar, paraAnual, indiceDaFaixa, impostoPelaTabela, reducaoDoImposto,
   descontoSimplificado, deducoesCompletas, calcularOpcao, pontoDeEquilibrio, simular,
-  contribuicaoInss, descontosMensais, brutoParaLiquido,
+  contribuicaoInss, descontosMensais, brutoParaLiquido, decimoTerceiro, calcularFerias,
   rodarTestes, CENARIOS_TESTE, CENARIOS_MENSAIS, gerarImagemResultado
 };
 
