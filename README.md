@@ -40,6 +40,8 @@ Todos os valores ficam no objeto `CONFIG`, no topo do `script.js`, com a fonte e
 
 Não precisa instalar nada. Baixe o projeto e abra o `index.html` no navegador.
 
+O site é um **PWA**: publicado (ex.: GitHub Pages), pode ser instalado na tela inicial do celular e funciona offline depois da primeira visita (service worker em `sw.js`; ao mudar o site, incremente a `VERSAO` dele para atualizar o cache).
+
 ```
 git clone https://github.com/gabriel434henrique-cell/calculadora-imposto-renda.git
 cd calculadora-imposto-renda
@@ -52,6 +54,7 @@ cd calculadora-imposto-renda
 ├── index.html   # estrutura da página e acessibilidade
 ├── style.css    # visual (cores em variáveis CSS)
 ├── script.js    # CONFIG, funções de cálculo e interface
+├── manifest.webmanifest + sw.js + ícones   # PWA (instalável, offline)
 ├── README.md
 └── LICENSE
 ```
