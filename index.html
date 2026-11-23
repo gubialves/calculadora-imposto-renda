@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Calculadora de Imposto de Renda – simples e rápida</title>
+  <meta name="description" content="Descubra em menos de 1 minuto quanto você paga de Imposto de Renda e quanto sobra no seu bolso. Sem cadastro, sem login, tudo no seu navegador.">
+  <meta name="theme-color" content="#2f5bea">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <a class="pular-link" href="#principal">Ir para o conteúdo</a>
+
+  <!-- Ícones de linha (sprite). Usados com <use href="#i-nome"> -->
+  <svg class="sprite" xmlns="http://www.w3.org/2000/svg" aria-hidden="true" focusable="false">
+    <symbol id="i-users" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></symbol>
+    <symbol id="i-cap" viewBox="0 0 24 24"><path d="M22 10 12 5 2 10l10 5 10-5z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/></symbol>
+    <symbol id="i-shield" viewBox="0 0 24 24"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></symbol>
+    <symbol id="i-coins" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v10"/><path d="M15 9.5h-4.2a1.7 1.7 0 0 0 0 3.4h2.4a1.7 1.7 0 0 1 0 3.4H9"/></symbol>
+    <symbol id="i-arrow-right" viewBox="0 0 24 24"><path d="M5 12h14"/><path d="M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-arrow-left" viewBox="0 0 24 24"><path d="M19 12H5"/><path d="M11 6l-6 6 6 6"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="M8.6 13.5l6.8 4"/><path d="M15.4 6.5l-6.8 4"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M3 12a9 9 0 0 1 15.5-6.2L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-15.5 6.2L3 16"/><path d="M3 21v-5h5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12l5 5 9-10"/></symbol>
+    <symbol id="i-lock" viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></symbol>
+  </svg>
+
+  <header class="topo">
+    <div class="topo-conteudo">
+      <a class="marca" href="./">Calculadora de Imposto</a>
+    </div>
+  </header>
+
+  <main id="principal" class="app">
+
+    <!-- Barra de progresso dos 3 passos -->
+    <div class="progresso">
+      <p class="progresso-texto" id="progresso-texto">Passo 1 de 3</p>
+      <div class="barra" role="progressbar" aria-valuemin="1" aria-valuemax="3" aria-valuenow="1" aria-labelledby="progresso-texto">
+        <span class="barra-preenchida" id="barra-preenchida"></span>
+      </div>
+    </div>
+
+    <div class="card">
+
+      <!-- PASSO 1: renda -->
+      <section id="passo-1" class="passo" aria-labelledby="t1">
+        <form id="form-1" novalidate>
+          <h1 id="t1" class="titulo" tabindex="-1">Quanto você ganha?</h1>
+          <p class="subtitulo">Pode ser um valor aproximado. Use o valor <strong>bruto</strong>, ou seja, antes de qualquer desconto.</p>
+
+          <fieldset class="periodo">
+            <legend class="sr-only">Período da renda</legend>
+            <label class="segmento"><input type="radio" name="periodo" value="mensal" checked><span>Mensal</span></label>
+            <label class="segmento"><input type="radio" name="periodo" value="anual"><span>Anual</span></label>
+          </fieldset>
+
+          <div class="campo-valor">
+            <label for="renda" class="rotulo" id="rotulo-renda">Quanto você ganha por mês?</label>
+            <div class="entrada-grande">
+              <span class="prefixo" aria-hidden="true">R$</span>
+              <input id="renda" type="text" inputmode="numeric" autocomplete="off" placeholder="0,00" aria-describedby="renda-dica renda-erro">
+            </div>
+            <p id="renda-dica" class="dica">Somamos 12 meses iguais para estimar o ano todo.</p>
+            <p id="renda-erro" class="erro" role="alert" hidden></p>
+          </div>
+
+          <div class="previa" id="previa-1" role="status" hidden></div>
+
+          <button class="btn btn-primario" type="submit">
+            Continuar
+            <svg class="icone" aria-hidden="true"><use href="#i-arrow-right"/></svg>
+          </button>
+        </form>
+      </section>
+
+      <!-- PASSO 2: despesas -->
+      <section id="passo-2" class="passo" aria-labelledby="t2" hidden>
+        <form id="form-2" novalidate>
+          <h1 id="t2" class="titulo" tabindex="-1">Você tem despesas que abatem imposto?</h1>
+          <p class="subtitulo">Tudo aqui é <strong>opcional</strong>. Informe os valores <strong id="unidade-despesas">por mês</strong>. Toque no <span class="ajuda-exemplo" aria-hidden="true">?</span> para entender cada item.</p>
+
+          <div id="campos-despesas" class="campos"></div>
+
+          <div class="previa" id="previa-2" role="status" hidden></div>
+
+          <div class="acoes">
+            <button class="btn btn-primario" type="submit">
+              Ver meu resultado
+              <svg class="icone" aria-hidden="true"><use href="#i-arrow-right"/></svg>
+            </button>
+            <button class="btn btn-secundario" type="button" id="btn-pular">Pular, não tenho</button>
+            <button class="btn btn-texto" type="button" id="btn-voltar-2">
+              <svg class="icone" aria-hidden="true"><use href="#i-arrow-left"/></svg>
+              Voltar
+            </button>
+          </div>
+        </form>
+      </section>
+
+      <!-- PASSO 3: resultado (montado pelo script.js) -->
+      <section id="passo-3" class="passo" hidden>
+        <div id="resultado"></div>
+      </section>
+
+    </div>
+
+    <p class="privacidade">
+      <svg class="icone" aria-hidden="true"><use href="#i-lock"/></svg>
+      Sem cadastro e sem login. Seus dados ficam só no seu navegador.
+    </p>
+  </main>
+
+  <footer class="rodape">
+    <p>Simulação informativa. Não substitui a declaração oficial na Receita Federal.
+      <a href="https://www.gov.br/receitafederal" target="_blank" rel="noopener noreferrer">gov.br/receitafederal<span class="sr-only"> (abre em nova aba)</span></a>
+    </p>
+  </footer>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script src="script.js"></script>
+</body>
+</html>

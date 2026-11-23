@@ -1,1 +1,125 @@
-# calculadora-imposto-renda
+# Calculadora de Imposto de Renda
+
+Simulador de Imposto de Renda de Pessoa Física (IRPF) em HTML, CSS e JavaScript puro. A pessoa informa quanto ganha, responde sobre despesas que abatem imposto e descobre quanto paga de imposto, quanto sobra e qual declaração compensa mais (simplificada ou completa).
+
+Feito para ser simples: 3 passos, linguagem sem jargão, funciona bem no celular e não pede cadastro nem login.
+
+## Como funciona
+
+1. **Quanto você ganha?** Valor mensal ou anual, com máscara de moeda.
+2. **Despesas que abatem imposto** (opcional): dependentes, saúde, educação, previdência (INSS/PGBL) e pensão alimentícia.
+3. **Resultado:** imposto estimado, gráfico de rosca (imposto x o que fica com você), comparativo simplificada x completa, alíquota efetiva e alíquota da faixa.
+
+O resultado fica embaçado até o desbloqueio pelo plano mensal (veja [Plano mensal](#plano-mensal)).
+
+## Regras de cálculo
+
+Ano-calendário **2026** (declaração de 2027), conforme a Receita Federal e a Lei 15.270/2025.
+
+| Regra | Valor |
+|---|---|
+| Faixa de alíquota zero (anual) | até R$ 29.145,60 |
+| Alíquotas da tabela progressiva | 0%, 7,5%, 15%, 22,5% e 27,5% |
+| Redução do imposto (Lei 15.270/2025) | até R$ 60.000/ano zera o imposto; de R$ 60.000,01 a R$ 88.200 a redução diminui aos poucos; acima disso não há redução |
+| Dedução por dependente | R$ 2.275,08 por ano |
+| Dedução com educação | até R$ 3.561,50 por pessoa por ano |
+| Dedução com saúde | sem limite |
+| Desconto simplificado | 20% da renda, até R$ 17.640 por ano |
+
+Todos os valores ficam no objeto `CONFIG`, no topo do `script.js`, com a fonte e a data de conferência. Para atualizar em um novo ano, basta alterar esse objeto.
+
+### O que o simulador não calcula
+
+- Imposto mínimo para rendas acima de R$ 600 mil por ano e tributação de dividendos (o site mostra um aviso).
+- O limite de 12% da renda para dedução de PGBL (está explicado no texto de ajuda do campo).
+- Regras específicas de aposentados, ganho de capital, aluguéis, 13º salário ou carnê-leão.
+
+> Simulação informativa. Não substitui a declaração oficial na Receita Federal: https://www.gov.br/receitafederal
+
+## Como rodar
+
+Não precisa instalar nada. Baixe o projeto e abra o `index.html` no navegador.
+
+```
+git clone https://github.com/gabriel434henrique-cell/calculadora-imposto-renda.git
+cd calculadora-imposto-renda
+# abra o index.html no navegador
+```
+
+## Estrutura
+
+```
+├── index.html   # estrutura da página e acessibilidade
+├── style.css    # visual (cores em variáveis CSS)
+├── script.js    # CONFIG, funções de cálculo e interface
+├── README.md
+└── LICENSE
+```
+
+O `script.js` é dividido em 4 partes: configuração (`CONFIG`), cálculo (funções puras, sem acesso à tela), interface e testes.
+
+## Testes
+
+Os cálculos são funções puras e podem ser testados sem abrir a página.
+
+No navegador, abra o console e digite:
+
+```js
+CalculaIR.rodarTestes()
+```
+
+No Node.js:
+
+```
+node -e "console.log(require('./script.js').rodarTestes())"
+```
+
+Cenários cobertos (valores calculados à mão a partir da tabela):
+
+| # | Cenário | Imposto esperado por ano | Melhor opção |
+|---|---|---|---|
+| 1 | Renda isenta: R$ 3.000/mês | R$ 0,00 | empate |
+| 2 | Faixa intermediária: R$ 6.000/mês | R$ 3.387,01 | simplificada |
+| 3 | Renda alta: R$ 15.000/mês | R$ 33.744,34 | simplificada |
+| 4 | Com dependentes: R$ 10.000/mês, 2 dependentes | R$ 17.244,34 | simplificada |
+| 5 | Com deduções: R$ 12.000/mês, 2 dependentes, saúde, educação e INSS | R$ 16.255,81 | completa |
+
+## Plano mensal
+
+O resultado aparece embaçado e é liberado por um plano mensal de R$ 5,00. A configuração fica em `CONFIG.plano`, no `script.js`:
+
+- `precoMensal`: valor mostrado no botão.
+- `linkPagamento`: link do checkout (Pix recorrente, Mercado Pago, Stripe etc.). Vazio, o botão só mostra um aviso.
+- `permitirDemo`: com `true`, abrir a página com `?demo=1` libera o resultado, só para testes. Deixe `false` ao publicar.
+
+Importante: como o cálculo roda no navegador, o bloqueio é visual. Para proteger de verdade, o cálculo e a confirmação da assinatura precisam ficar em um servidor.
+
+## Acessibilidade
+
+- Contraste mínimo WCAG AA, foco visível e navegação por teclado.
+- Todos os campos têm rótulo e há suporte a leitor de tela.
+- Respeita `prefers-reduced-motion`.
+
+## Privacidade
+
+O cálculo roda inteiramente no navegador. O site não coleta nem envia os valores informados. Não usa fontes nem scripts de terceiros.
+
+## Publicar com GitHub Pages
+
+1. Vá em **Settings → Pages**.
+2. Em *Source*, escolha **Deploy from a branch**, branch `main` e pasta `/ (root)`.
+3. Aguarde 1 a 2 minutos. O site ficará em `https://gabriel434henrique-cell.github.io/calculadora-imposto-renda/`.
+
+## Fontes
+
+- Lei nº 15.270, de 26/11/2025 (isenção até R$ 5.000 por mês e redução gradual até R$ 7.350 por mês)
+- Receita Federal: tabelas do IRPF 2026 e do exercício 2027
+
+## Autor
+
+Gabriel Henrique Alves de Souza
+[GitHub](https://github.com/gabriel434henrique-cell) · [LinkedIn](https://www.linkedin.com/in/gabriel-henrique-alves-5b13872a7)
+
+## Licença
+
+MIT. Veja o arquivo `LICENSE`.
