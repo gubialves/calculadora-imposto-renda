@@ -423,6 +423,32 @@ function calcularFerias(salarioBruto, dependentes = 0, cfg = CONFIG) {
 }
 
 
+/**
+ * CLT x PJ: soma tudo o que a CLT entrega no ano — 11 meses normais, 1 mês
+ * de férias (salário + 1/3), 13º líquido e o FGTS (8% sobre salários, 13º e
+ * o terço de férias; é dinheiro da pessoa, só que guardado) — e devolve o
+ * "pacote mensal". O faturamento PJ necessário é o pacote dividido por
+ * (1 − alíquota do Simples), porque o PJ só desconta o imposto sobre o
+ * faturamento. Arredondado para cima para nunca ficar abaixo do pacote.
+ */
+function cltVersusPJ(salarioBruto, dependentes = 0, aliquotaPJ = 0.06, cfg = CONFIG) {
+  const salario = Math.max(0, Number(salarioBruto) || 0);
+  if (salario <= 0) return null;
+  const aliquota = Math.min(0.9, Math.max(0, Number(aliquotaPJ) || 0));
+  const mes = descontosMensais(salario, dependentes, cfg);
+  const ferias = calcularFerias(salario, dependentes, cfg);
+  const d13 = decimoTerceiro(salario, dependentes, cfg);
+
+  const liquidoAnual = arredondar(11 * mes.liquido + ferias.liquido + d13.liquido);
+  const fgtsAnual = arredondar(0.08 * (12 * salario + d13.bruto + ferias.terco));
+  const pacoteAnual = arredondar(liquidoAnual + fgtsAnual);
+  const pacoteMensal = arredondar(pacoteAnual / 12);
+  const faturamentoPJ = Math.ceil((pacoteMensal / (1 - aliquota)) * 100) / 100;
+
+  return { salario, aliquotaPJ: aliquota, liquidoAnual, fgtsAnual, pacoteAnual, pacoteMensal, faturamentoPJ };
+}
+
+
 /* ============================================================================
    3) INTERFACE
    Só roda no navegador (no Node, apenas as funções acima são exportadas).
@@ -1132,6 +1158,48 @@ function iniciarFerramentas() {
   });
   iniciarReverso();
   iniciarDecimoFerias();
+  iniciarCltPJ();
+}
+
+/* ---------- Ferramenta: CLT x PJ ---------- */
+function renderizarCltPJ(r) {
+  const aliquotaTxt = (r.aliquotaPJ * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%';
+  const liquidoMedio = r.pacoteAnual - r.fgtsAnual;
+  $('#pj-saida').innerHTML = `
+    <section class="bloco" aria-labelledby="h-pj">
+      <h2 class="bloco-titulo" id="h-pj">Para empatar com a sua CLT</h2>
+      <p class="headline">O PJ precisa faturar <span class="valor-destaque">${moeda(r.faturamentoPJ)}</span> por mês</p>
+      <div class="explica">
+        ${linhaExplica('Líquido CLT no ano', moeda(liquidoMedio), '11 salários normais + mês de férias + 13º, já sem INSS e imposto. Por mês, dá ' + moeda(arredondar(liquidoMedio / 12)) + '.')}
+        ${linhaExplica('FGTS no ano', '+ ' + moeda(r.fgtsAnual), 'A empresa deposita 8% sobre salários, 13º e férias. Não cai no contracheque, mas é dinheiro seu (demissão sem justa causa, casa própria, aposentadoria).')}
+        ${linhaExplica('Pacote CLT por mês', moeda(r.pacoteMensal), 'A média mensal de tudo o que a CLT te dá: líquido + FGTS.')}
+        ${linhaExplica('Faturamento PJ', moeda(r.faturamentoPJ), `Com ${aliquotaTxt} de imposto, sobram ${moeda(r.pacoteMensal)} líquidos — o mesmo pacote da CLT.`)}
+      </div>
+      <p class="dica">Acima desse valor, o PJ passa a render mais que a CLT. A conta não inclui benefícios (vale-refeição, plano de saúde) nem custo de contador, e o PJ não tem 13º, férias pagas, FGTS nem seguro-desemprego — o preço da estabilidade é seu.</p>
+    </section>`;
+}
+
+function iniciarCltPJ() {
+  const input = $('#pj-salario');
+  const erro = $('#pj-erro');
+  let salario = 0;
+  let dependentes = 0;
+  ligarMascaraMoeda(input, (valor) => {
+    salario = valor;
+    if (valor > 0) { erro.textContent = ''; erro.hidden = true; }
+  });
+  ligarContador($('#pj-dependentes'), (n) => { dependentes = n; }, { max: CONFIG.limites.maxDependentes });
+  $('#form-cltpj').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    if (!(salario > 0)) {
+      erro.textContent = 'Digite o salário bruto da CLT para comparar.';
+      erro.hidden = false;
+      input.focus();
+      return;
+    }
+    const aliquota = Number(($('input[name="pj-aliquota"]:checked') || {}).value || 0.06);
+    renderizarCltPJ(cltVersusPJ(salario, dependentes, aliquota));
+  });
 }
 
 /* ---------- Ferramenta: 13º salário e férias ---------- */
@@ -1359,14 +1427,20 @@ const CENARIOS_MENSAIS = [
   /* Férias de R$ 4.500: mês fecha com salário + 1/3 = 6.000 (líquido
      4.973,39) e os descontos sobem 595,10 em relação ao mês normal. */
   { nome: '14) Férias de R$ 4.500', obtido: () => calcularFerias(4500).liquido, esperado: 4973.39 },
-  { nome: '15) Desconto extra das férias', obtido: () => calcularFerias(4500).descontoExtra, esperado: 595.10 }
+  { nome: '15) Desconto extra das férias', obtido: () => calcularFerias(4500).descontoExtra, esperado: 595.10 },
+  /* CLT de R$ 6.000: ano = 11 × 4.973,39 + férias (8.000 brutos → 6.040,64)
+     + 13º (4.973,39) = 65.721,32; FGTS = 8% × 80.000 = 6.400;
+     pacote mensal = 6.010,11; PJ a 6% → 6.010,11 ÷ 0,94 = 6.393,74. */
+  { nome: '16) Ano CLT de R$ 6.000', obtido: () => cltVersusPJ(6000).liquidoAnual, esperado: 65721.32 },
+  { nome: '17) FGTS de R$ 6.000', obtido: () => cltVersusPJ(6000).fgtsAnual, esperado: 6400 },
+  { nome: '18) PJ para empatar R$ 6.000 CLT', obtido: () => cltVersusPJ(6000).faturamentoPJ, esperado: 6393.74 }
 ];
 
 function rodarTesteWhatsApp() {
   // O link wa.me precisa codificar o texto (acentos, espaços e o "R$").
   const url = urlWhatsApp('Simulei meu IR: R$ 100,00 & você?');
   const esperado = 'https://wa.me/?text=' + encodeURIComponent('Simulei meu IR: R$ 100,00 & você?');
-  return { cenario: '16) Link do WhatsApp', esperado, obtido: url, ok: url === esperado };
+  return { cenario: '19) Link do WhatsApp', esperado, obtido: url, ok: url === esperado };
 }
 
 function rodarTestesMensais() {
@@ -1376,7 +1450,7 @@ function rodarTestesMensais() {
   });
   const reverso = brutoParaLiquido(5000);
   resultados.push({
-    cenario: '17) Reverso de R$ 5.000 líquidos',
+    cenario: '20) Reverso de R$ 5.000 líquidos',
     esperado: 'bruto entre 6000 e 6100 e líquido >= 5000',
     obtido: `bruto ${reverso.bruto}, líquido ${reverso.descontos.liquido}`,
     ok: reverso.bruto > 6000 && reverso.bruto < 6100 && reverso.descontos.liquido >= 5000 && reverso.descontos.liquido < 5001
@@ -1403,7 +1477,7 @@ function rodarTestes() {
 const CalculaIR = {
   CONFIG, arredondar, paraAnual, indiceDaFaixa, impostoPelaTabela, reducaoDoImposto,
   descontoSimplificado, deducoesCompletas, calcularOpcao, pontoDeEquilibrio, simular,
-  contribuicaoInss, descontosMensais, brutoParaLiquido, decimoTerceiro, calcularFerias,
+  contribuicaoInss, descontosMensais, brutoParaLiquido, decimoTerceiro, calcularFerias, cltVersusPJ,
   textoCompartilhamento, urlWhatsApp,
   rodarTestes, CENARIOS_TESTE, CENARIOS_MENSAIS, gerarImagemResultado
 };

@@ -405,3 +405,7 @@ a { color: var(--azul-700); }
 .campo-linha .contador input { flex: none; width: 64px; }
 .btn-zap { background: #1faa53; color: #fff; }
 .btn-zap:hover { background: #178f44; }
+/* ---------- Ferramenta CLT x PJ ---------- */
+.periodo.tres { grid-template-columns: 1fr 1fr 1fr; }
+fieldset.campo { border: 1px solid var(--borda); }
+.legenda-campo { padding: 0 6px; }

@@ -32,6 +32,7 @@
     <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v5"/><path d="M12 8h.01"/></symbol>
     <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="5"/><circle cx="12" cy="12" r="1"/></symbol>
     <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="17" rx="2"/><path d="M8 2v4"/><path d="M16 2v4"/><path d="M3 9h18"/></symbol>
+    <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2"/><path d="M2 13h20"/></symbol>
     <symbol id="i-whatsapp" viewBox="0 0 24 24"><path d="M12 2a10 10 0 0 0-8.6 15.1L2 22l5.1-1.3A10 10 0 1 0 12 2z"/><path d="M8.6 8.2c.5-.5 1-.6 1.4-.5.3.1.5.3.7.7l.7 1.6c.1.3.1.5-.1.8l-.5.6c-.2.2-.2.5-.1.7.5.9 1.3 1.7 2.3 2.2.3.1.5.1.7-.1l.6-.7c.2-.2.5-.3.8-.2l1.6.8c.4.2.6.4.6.8 0 .8-.5 1.5-1.2 1.8-.6.3-1.4.3-2.5-.1-2.4-1-4.4-2.8-5.4-5.2-.5-1.2-.6-2.2.6-3.4z"/></symbol>
   </svg>
 
@@ -91,6 +92,14 @@
               <span class="ferramenta-textos">
                 <span class="ferramenta-nome">Salário reverso</span>
                 <span class="ferramenta-desc">Quero tirar um valor líquido: quanto precisa ser o bruto?</span>
+              </span>
+              <svg class="icone seta" aria-hidden="true"><use href="#i-arrow-right"/></svg>
+            </button>
+            <button type="button" class="ferramenta" data-ferramenta="cltpj">
+              <svg class="icone" aria-hidden="true"><use href="#i-briefcase"/></svg>
+              <span class="ferramenta-textos">
+                <span class="ferramenta-nome">CLT ou PJ?</span>
+                <span class="ferramenta-desc">Quanto você precisa faturar como PJ para empatar com a CLT?</span>
               </span>
               <svg class="icone seta" aria-hidden="true"><use href="#i-arrow-right"/></svg>
             </button>
@@ -211,6 +220,54 @@
           </div>
         </form>
         <div id="df-saida" class="ferramenta-saida" aria-live="polite"></div>
+      </section>
+
+      <!-- FERRAMENTA: CLT x PJ -->
+      <section id="tela-cltpj" class="passo" data-tela="cltpj" aria-labelledby="t-cltpj" hidden>
+        <form id="form-cltpj" novalidate>
+          <h1 id="t-cltpj" class="titulo" tabindex="-1">CLT ou PJ: quanto precisa faturar?</h1>
+          <p class="subtitulo">A gente soma tudo o que a CLT te dá (salário líquido, 13º, férias e FGTS) e mostra quanto você precisa <strong>faturar como PJ</strong> para empatar (regras de 2026).</p>
+
+          <div class="campo-valor">
+            <label for="pj-salario" class="rotulo">Salário bruto CLT por mês</label>
+            <div class="entrada-grande">
+              <span class="prefixo" aria-hidden="true">R$</span>
+              <input id="pj-salario" type="text" inputmode="numeric" autocomplete="off" placeholder="0,00" aria-describedby="pj-erro">
+            </div>
+            <p id="pj-erro" class="erro" role="alert" hidden></p>
+          </div>
+
+          <div class="campo campo-linha">
+            <label class="campo-rotulo" for="pj-dependentes">Dependentes para o imposto</label>
+            <div class="contador">
+              <button type="button" data-passo="-1" aria-label="Diminuir o número de dependentes">−</button>
+              <input id="pj-dependentes" class="contador-valor" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" value="0">
+              <button type="button" data-passo="1" aria-label="Aumentar o número de dependentes">+</button>
+            </div>
+          </div>
+
+          <fieldset class="campo">
+            <legend class="campo-rotulo legenda-campo">Imposto do PJ (Simples Nacional)</legend>
+            <div class="periodo tres">
+              <label class="segmento"><input type="radio" name="pj-aliquota" value="0.06" checked><span>6%</span></label>
+              <label class="segmento"><input type="radio" name="pj-aliquota" value="0.11"><span>11%</span></label>
+              <label class="segmento"><input type="radio" name="pj-aliquota" value="0.155"><span>15,5%</span></label>
+            </div>
+            <p class="dica">A alíquota exata depende do anexo e do faturamento: 6% é o começo do Anexo III (serviços em geral); 15,5% é o começo do Anexo V. Um contador confirma o seu caso.</p>
+          </fieldset>
+
+          <div class="acoes">
+            <button class="btn btn-primario" type="submit">
+              Comparar
+              <svg class="icone" aria-hidden="true"><use href="#i-arrow-right"/></svg>
+            </button>
+            <button class="btn btn-texto" type="button" data-voltar>
+              <svg class="icone" aria-hidden="true"><use href="#i-arrow-left"/></svg>
+              Voltar
+            </button>
+          </div>
+        </form>
+        <div id="pj-saida" class="ferramenta-saida" aria-live="polite"></div>
       </section>
 
     </div>
