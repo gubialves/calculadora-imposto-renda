@@ -705,6 +705,9 @@ function renderizarResultado(manterFoco = false) {
     <div class="resultado-acoes">
       ${bloqueado ? '' : `<button type="button" class="btn btn-primario" id="btn-compartilhar">
         <svg class="icone" aria-hidden="true"><use href="#i-share"/></svg>Compartilhar resultado
+      </button>
+      <button type="button" class="btn btn-secundario" id="btn-imagem">
+        <svg class="icone" aria-hidden="true"><use href="#i-image"/></svg>Baixar imagem pra stories
       </button>`}
       <button type="button" class="btn btn-secundario" id="btn-refazer">
         <svg class="icone" aria-hidden="true"><use href="#i-refresh"/></svg>Refazer simulação
@@ -735,6 +738,8 @@ function renderizarResultado(manterFoco = false) {
   $('#btn-voltar-3').addEventListener('click', () => irParaPasso(2));
   const btnCompartilhar = $('#btn-compartilhar');
   if (btnCompartilhar) btnCompartilhar.addEventListener('click', () => compartilhar(r));
+  const btnImagem = $('#btn-imagem');
+  if (btnImagem) btnImagem.addEventListener('click', () => baixarImagem(r));
   const btnDesbloquear = $('#btn-desbloquear');
   if (btnDesbloquear) btnDesbloquear.addEventListener('click', desbloquear);
 }
@@ -762,6 +767,98 @@ function refazer() {
   $$('.ajuda-texto').forEach((p) => { p.hidden = true; });
   irParaPasso(1);
   $('#renda').focus();
+}
+
+/** Gera uma imagem PNG (formato stories, 1080x1920) com o resultado, para
+    a pessoa postar onde quiser. Tudo desenhado em canvas, sem enviar nada. */
+function gerarImagemResultado(r) {
+  const W = 1080, H = 1920;
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+
+  // Fundo azul-escuro com leve degradê
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, '#1b2f7a');
+  grad.addColorStop(1, '#14235f');
+  ctx.fillStyle = grad;
+  ctx.fillRect(0, 0, W, H);
+
+  const centroX = W / 2;
+  const txt = (texto, y, tamanho, cor, peso = 400) => {
+    ctx.fillStyle = cor;
+    ctx.font = `${peso} ${tamanho}px system-ui, -apple-system, 'Segoe UI', sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(texto, centroX, y);
+  };
+  const dinheiro = (v) => 'R$ ' + v.toLocaleString('pt-BR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+  // Marca
+  txt('CALCULA IR', 150, 44, '#9db4ff', 800);
+
+  // Manchete
+  if (r.imposto <= 0) {
+    txt('Não vou pagar', 340, 96, '#ffffff', 800);
+    txt('imposto de renda', 450, 96, '#ffffff', 800);
+  } else {
+    txt(dinheiro(r.imposto / 12), 380, 130, '#ffffff', 800);
+    txt('de imposto de renda por mês', 470, 52, '#c9d6ff', 400);
+  }
+
+  // Rosca: imposto x o que fica com a pessoa
+  const cx = centroX, cy = 780, raio = 210, grosso = 64;
+  const pct = r.rendaAnual > 0 ? r.imposto / r.rendaAnual : 0;
+  ctx.lineWidth = grosso;
+  ctx.lineCap = 'round';
+  ctx.strokeStyle = '#17a05a';
+  ctx.beginPath(); ctx.arc(cx, cy, raio, 0, 2 * Math.PI); ctx.stroke();
+  if (pct > 0) {
+    ctx.strokeStyle = '#e0474f';
+    ctx.beginPath(); ctx.arc(cx, cy, raio, -Math.PI / 2, -Math.PI / 2 + pct * 2 * Math.PI); ctx.stroke();
+  }
+  txt((pct * 100).toLocaleString('pt-BR', { maximumFractionDigits: 1 }) + '%', cy + 6, 92, '#ffffff', 800);
+  txt('vai para o imposto', cy + 62, 38, '#c9d6ff');
+
+  // Fatos principais
+  let y = 1180;
+  const linha = (rotulo, valor, corValor = '#ffffff') => {
+    ctx.textAlign = 'left';
+    ctx.fillStyle = '#9db4ff'; ctx.font = "400 40px system-ui, -apple-system, 'Segoe UI', sans-serif";
+    ctx.fillText(rotulo, 120, y);
+    ctx.textAlign = 'right';
+    ctx.fillStyle = corValor; ctx.font = "800 46px system-ui, -apple-system, 'Segoe UI', sans-serif";
+    ctx.fillText(valor, W - 120, y);
+    y += 88;
+  };
+  linha('Fica comigo', dinheiro(r.sobra / 12) + '/mês', '#5be3a1');
+  if (r.retido > 0 && r.saldo > 0.005) linha('Restituição', dinheiro(r.saldo) + '/ano', '#5be3a1');
+  if (r.retido > 0 && r.saldo < -0.005) linha('Ainda vou pagar', dinheiro(-r.saldo) + '/ano', '#ff9aa0');
+  if (r.melhor !== 'empate') {
+    linha('Melhor declaração', r.melhor === 'completa' ? 'Completa' : 'Simplificada', '#f5b82e');
+  }
+
+  // Rodapé com o endereço do site (encolhe a fonte se for comprido)
+  let endereco = (window.location.host + window.location.pathname).replace(/^www\./, '').replace(/\/$/, '');
+  if (endereco.length > 34) endereco = window.location.host.replace(/^www\./, '');
+  txt('Simule o seu em menos de 1 minuto:', H - 160, 38, '#c9d6ff');
+  txt(endereco, H - 100, endereco.length > 26 ? 34 : 46, '#ffffff', 800);
+
+  return canvas;
+}
+
+/** Baixa a imagem do resultado como PNG. */
+function baixarImagem(r) {
+  const canvas = gerarImagemResultado(r);
+  canvas.toBlob((blob) => {
+    if (!blob) { avisoRapido('Não consegui gerar a imagem. Tente de novo.'); return; }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'meu-imposto-de-renda.png';
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+    avisoRapido('Imagem baixada! É só postar nos stories.');
+  }, 'image/png');
 }
 
 async function compartilhar(r) {
@@ -874,7 +971,7 @@ function rodarTestes() {
 /* ---------- Exportação e início ---------- */
 const CalculaIR = {
   CONFIG, arredondar, paraAnual, indiceDaFaixa, impostoPelaTabela, reducaoDoImposto,
-  descontoSimplificado, deducoesCompletas, calcularOpcao, pontoDeEquilibrio, simular, rodarTestes, CENARIOS_TESTE
+  descontoSimplificado, deducoesCompletas, calcularOpcao, pontoDeEquilibrio, simular, rodarTestes, CENARIOS_TESTE, gerarImagemResultado
 };
 
 if (typeof module !== 'undefined' && module.exports) module.exports = CalculaIR;
