@@ -893,7 +893,10 @@ function renderizarResultado(manterFoco = false) {
     </div>
 
     <div class="resultado-acoes">
-      ${bloqueado ? '' : `<button type="button" class="btn btn-primario" id="btn-compartilhar">
+      ${bloqueado ? '' : `<button type="button" class="btn btn-zap" id="btn-zap">
+        <svg class="icone" aria-hidden="true"><use href="#i-whatsapp"/></svg>Mandar no WhatsApp
+      </button>
+      <button type="button" class="btn btn-primario" id="btn-compartilhar">
         <svg class="icone" aria-hidden="true"><use href="#i-share"/></svg>Compartilhar resultado
       </button>
       <button type="button" class="btn btn-secundario" id="btn-imagem">
@@ -926,6 +929,8 @@ function renderizarResultado(manterFoco = false) {
   });
   $('#btn-refazer').addEventListener('click', refazer);
   $('#btn-voltar-3').addEventListener('click', () => irParaPasso(2));
+  const btnZap = $('#btn-zap');
+  if (btnZap) btnZap.addEventListener('click', () => compartilharWhatsApp(r));
   const btnCompartilhar = $('#btn-compartilhar');
   if (btnCompartilhar) btnCompartilhar.addEventListener('click', () => compartilhar(r));
   const btnImagem = $('#btn-imagem');
@@ -1051,12 +1056,27 @@ function baixarImagem(r) {
   }, 'image/png');
 }
 
-async function compartilhar(r) {
-  // Compartilha só o resultado, sem a renda informada.
+/** Texto de compartilhamento: só o resultado, sem a renda informada. */
+function textoCompartilhamento(r) {
   const textoImposto = r.imposto <= 0
     ? 'não vou pagar imposto de renda'
     : `vou pagar cerca de ${moeda(r.imposto / 12)} de imposto por mês (${percentual(r.aliquotaEfetiva)} do que ganho)`;
-  const texto = `Simulei meu Imposto de Renda no Calcula IR: ${textoImposto}. Simule o seu em menos de 1 minuto:`;
+  return `Simulei meu Imposto de Renda no Calcula IR: ${textoImposto}. Simule o seu em menos de 1 minuto:`;
+}
+
+/** Monta o link wa.me com o texto codificado (funciona no celular e no PC). */
+function urlWhatsApp(texto) {
+  return 'https://wa.me/?text=' + encodeURIComponent(texto);
+}
+
+/** Abre o WhatsApp já com o resultado pronto para enviar. */
+function compartilharWhatsApp(r) {
+  const url = window.location.href.split('#')[0];
+  window.open(urlWhatsApp(`${textoCompartilhamento(r)} ${url}`), '_blank', 'noopener,noreferrer');
+}
+
+async function compartilhar(r) {
+  const texto = textoCompartilhamento(r);
   const url = window.location.href.split('#')[0];
 
   if (navigator.share) {
@@ -1342,6 +1362,13 @@ const CENARIOS_MENSAIS = [
   { nome: '15) Desconto extra das férias', obtido: () => calcularFerias(4500).descontoExtra, esperado: 595.10 }
 ];
 
+function rodarTesteWhatsApp() {
+  // O link wa.me precisa codificar o texto (acentos, espaços e o "R$").
+  const url = urlWhatsApp('Simulei meu IR: R$ 100,00 & você?');
+  const esperado = 'https://wa.me/?text=' + encodeURIComponent('Simulei meu IR: R$ 100,00 & você?');
+  return { cenario: '16) Link do WhatsApp', esperado, obtido: url, ok: url === esperado };
+}
+
 function rodarTestesMensais() {
   const resultados = CENARIOS_MENSAIS.map((c) => {
     const obtido = c.obtido();
@@ -1349,7 +1376,7 @@ function rodarTestesMensais() {
   });
   const reverso = brutoParaLiquido(5000);
   resultados.push({
-    cenario: '16) Reverso de R$ 5.000 líquidos',
+    cenario: '17) Reverso de R$ 5.000 líquidos',
     esperado: 'bruto entre 6000 e 6100 e líquido >= 5000',
     obtido: `bruto ${reverso.bruto}, líquido ${reverso.descontos.liquido}`,
     ok: reverso.bruto > 6000 && reverso.bruto < 6100 && reverso.descontos.liquido >= 5000 && reverso.descontos.liquido < 5001
@@ -1366,6 +1393,7 @@ function rodarTestes() {
   });
   resultados.push(rodarTesteEquilibrio());
   resultados.push(...rodarTestesMensais());
+  resultados.push(rodarTesteWhatsApp());
   if (typeof console !== 'undefined' && console.table) console.table(resultados);
   return resultados;
 }
@@ -1376,6 +1404,7 @@ const CalculaIR = {
   CONFIG, arredondar, paraAnual, indiceDaFaixa, impostoPelaTabela, reducaoDoImposto,
   descontoSimplificado, deducoesCompletas, calcularOpcao, pontoDeEquilibrio, simular,
   contribuicaoInss, descontosMensais, brutoParaLiquido, decimoTerceiro, calcularFerias,
+  textoCompartilhamento, urlWhatsApp,
   rodarTestes, CENARIOS_TESTE, CENARIOS_MENSAIS, gerarImagemResultado
 };
 

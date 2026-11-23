@@ -403,3 +403,5 @@ a { color: var(--azul-700); }
 .campo-linha .campo-rotulo { margin: 0; }
 .campo-linha .contador { flex: none; }
 .campo-linha .contador input { flex: none; width: 64px; }
+.btn-zap { background: #1faa53; color: #fff; }
+.btn-zap:hover { background: #178f44; }

@@ -1,7 +1,7 @@
 /* Calcula IR - service worker (PWA: funciona offline)
    Estratégia: cache-first para os arquivos do app, que mudam a cada versão
    (VERSAO). Ao atualizar o site, basta mudar a VERSAO para renovar o cache. */
-const VERSAO = 'calcula-ir-v1-3';
+const VERSAO = 'calcula-ir-v1-4';
 const ARQUIVOS = ['.', 'index.html', 'style.css', 'script.js', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (ev) => {
