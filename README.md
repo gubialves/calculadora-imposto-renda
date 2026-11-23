@@ -8,7 +8,7 @@ Feito para ser simples: 3 passos, linguagem sem jargão, funciona bem no celular
 
 1. **Quanto você ganha?** Valor mensal ou anual, com máscara de moeda.
 2. **Despesas que abatem imposto** (opcional): dependentes, saúde, educação, previdência (INSS/PGBL) e pensão alimentícia. Dá também para informar o **imposto que você já pagou** (o IRRF do contracheque).
-3. **Resultado:** imposto estimado, **restituição ou imposto a pagar** (quando o IRRF é informado), gráfico de rosca (imposto x o que fica com você), comparativo simplificada x completa, alíquota efetiva e alíquota da faixa.
+3. **Resultado:** imposto estimado, **restituição ou imposto a pagar** (quando o IRRF é informado), gráfico de rosca (imposto x o que fica com você), comparativo simplificada x completa com o **ponto de equilíbrio** (a partir de quanto de gasto dedutível a completa passa a compensar), alíquota efetiva e alíquota da faixa. Dá para **baixar uma imagem do resultado** (formato stories) para compartilhar.
 
 O resultado fica embaçado até o desbloqueio pelo plano mensal (veja [Plano mensal](#plano-mensal)).
 
@@ -40,6 +40,8 @@ Todos os valores ficam no objeto `CONFIG`, no topo do `script.js`, com a fonte e
 
 Não precisa instalar nada. Baixe o projeto e abra o `index.html` no navegador.
 
+O site é um **PWA**: publicado (ex.: GitHub Pages), pode ser instalado na tela inicial do celular e funciona offline depois da primeira visita (service worker em `sw.js`; ao mudar o site, incremente a `VERSAO` dele para atualizar o cache).
+
 ```
 git clone https://github.com/gabriel434henrique-cell/calculadora-imposto-renda.git
 cd calculadora-imposto-renda
@@ -52,6 +54,7 @@ cd calculadora-imposto-renda
 ├── index.html   # estrutura da página e acessibilidade
 ├── style.css    # visual (cores em variáveis CSS)
 ├── script.js    # CONFIG, funções de cálculo e interface
+├── manifest.webmanifest + sw.js + ícones   # PWA (instalável, offline)
 ├── README.md
 └── LICENSE
 ```
@@ -84,6 +87,7 @@ Cenários cobertos (valores calculados à mão a partir da tabela):
 | 4 | Com dependentes: R$ 10.000/mês, 2 dependentes | R$ 17.244,34 | simplificada |
 | 5 | Com deduções: R$ 12.000/mês, 2 dependentes, saúde, educação e INSS | R$ 16.255,81 | completa |
 | 6 | Restituição: R$ 6.000/mês com R$ 400/mês já retidos | R$ 3.387,01 | simplificada (restituição de R$ 1.412,99) |
+| 7 | Ponto de equilíbrio: R$ 6.000/mês | a completa passa a compensar acima de R$ 14.400 de deduções/ano | – |
 
 ## Plano mensal
 
