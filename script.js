@@ -102,6 +102,17 @@ const CONFIG = {
     }
   },
 
+  /* MEI 2026: DAS mensal fixo = 5% do salário mínimo (INSS, R$ 81,05) +
+     R$ 1 de ICMS (comércio/indústria) e/ou R$ 5 de ISS (serviços). O valor
+     não muda com o faturamento. Limite de faturamento: R$ 81.000/ano em 2026
+     (média de R$ 6.750/mês); sobe para R$ 110.000 em 2027.
+     Fonte: LC 123/2006, Portal do Empreendedor e Sebrae. Conferido em 23/11/2026. */
+  mei: {
+    das: { comercio: 82.05, servicos: 86.05, ambos: 87.05 },
+    limiteAnual: 81000,
+    limiteAnual2027: 110000
+  },
+
   /* INSS 2026 (empregado CLT), alíquotas progressivas com parcela a deduzir.
      Teto do salário de contribuição: R$ 8.475,55 (contribuição máx. R$ 988,09).
      Fonte: Portaria Interministerial MPS/MF nº 13, de 09/01/2026.
@@ -446,6 +457,32 @@ function cltVersusPJ(salarioBruto, dependentes = 0, aliquotaPJ = 0.06, cfg = CON
   const faturamentoPJ = Math.ceil((pacoteMensal / (1 - aliquota)) * 100) / 100;
 
   return { salario, aliquotaPJ: aliquota, liquidoAnual, fgtsAnual, pacoteAnual, pacoteMensal, faturamentoPJ };
+}
+
+
+/**
+ * MEI: quanto sobra do faturamento depois do DAS. O DAS é fixo (não muda
+ * com o faturamento) e o limite de 2026 é R$ 81.000/ano (R$ 6.750/mês de
+ * média). Devolve também a projeção anual e o excesso, se houver.
+ */
+function simularMei(faturamentoMensal, atividade = 'servicos', cfg = CONFIG) {
+  const faturamento = Math.max(0, Number(faturamentoMensal) || 0);
+  const das = cfg.mei.das[atividade] || cfg.mei.das.servicos;
+  const anual = arredondar(faturamento * 12);
+  const excedeu = anual > cfg.mei.limiteAnual;
+  return {
+    faturamento,
+    atividade,
+    das,
+    sobra: arredondar(faturamento - das),
+    percentualDas: faturamento > 0 ? das / faturamento : 0,
+    anual,
+    limiteAnual: cfg.mei.limiteAnual,
+    limiteAnual2027: cfg.mei.limiteAnual2027,
+    mediaMensalPermitida: arredondar(cfg.mei.limiteAnual / 12),
+    excedeu,
+    excesso: excedeu ? arredondar(anual - cfg.mei.limiteAnual) : 0
+  };
 }
 
 
@@ -1159,6 +1196,50 @@ function iniciarFerramentas() {
   iniciarReverso();
   iniciarDecimoFerias();
   iniciarCltPJ();
+  iniciarMei();
+}
+
+/* ---------- Ferramenta: MEI ---------- */
+function renderizarMei(r) {
+  const nomeAtividade = { comercio: 'comércio/indústria', servicos: 'serviços', ambos: 'comércio e serviços' }[r.atividade];
+  const avisoLimite = r.excedeu
+    ? `<div class="aviso" role="note"><svg class="icone" aria-hidden="true"><use href="#i-info"/></svg>
+         <p style="margin:0">Atenção: ${moeda(r.faturamento)} por mês dá ${moeda(r.anual)} por ano, <strong>${moeda(r.excesso)} acima do limite do MEI</strong> (${moeda(r.limiteAnual)} em 2026). Passar do limite obriga o desenquadramento para microempresa — vale falar com um contador antes.</p></div>`
+    : '';
+  $('#mei-saida').innerHTML = `
+    <section class="bloco" aria-labelledby="h-mei">
+      <h2 class="bloco-titulo" id="h-mei">Do seu faturamento sobram</h2>
+      <p class="headline"><span class="valor-destaque verde">${moeda(r.sobra)}</span> por mês depois do DAS</p>
+      <div class="explica">
+        ${linhaExplica('Faturamento', moeda(r.faturamento), 'Tudo o que entra no mês com a sua atividade de MEI.')}
+        ${linhaExplica('DAS (' + nomeAtividade + ')', '− ' + moeda(r.das), 'Boleto fixo do MEI: INSS de R$ 81,05 mais os impostos da atividade. Não muda com o faturamento e vence todo dia 20.')}
+        ${linhaExplica('Peso do DAS', percentual(r.percentualDas), 'Quanto do seu faturamento vai para o boleto. Quanto mais você fatura, mais leve fica.')}
+        ${linhaExplica('Projeção no ano', moeda(r.anual), `O limite do MEI em 2026 é ${moeda(r.limiteAnual)} (média de ${moeda(r.mediaMensalPermitida)} por mês). Em 2027 sobe para ${moeda(r.limiteAnual2027)}.`)}
+      </div>
+      ${avisoLimite}
+      <p class="dica">O DAS já inclui o INSS, que garante aposentadoria por idade, auxílio-doença e salário-maternidade. Esta conta não inclui outros custos do negócio (material, internet, contador).</p>
+    </section>`;
+}
+
+function iniciarMei() {
+  const input = $('#mei-faturamento');
+  const erro = $('#mei-erro');
+  let faturamento = 0;
+  ligarMascaraMoeda(input, (valor) => {
+    faturamento = valor;
+    if (valor > 0) { erro.textContent = ''; erro.hidden = true; }
+  });
+  $('#form-mei').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    if (!(faturamento > 0)) {
+      erro.textContent = 'Digite o faturamento do mês para calcular.';
+      erro.hidden = false;
+      input.focus();
+      return;
+    }
+    const atividade = (($('input[name="mei-atividade"]:checked') || {}).value) || 'servicos';
+    renderizarMei(simularMei(faturamento, atividade));
+  });
 }
 
 /* ---------- Ferramenta: CLT x PJ ---------- */
@@ -1433,14 +1514,18 @@ const CENARIOS_MENSAIS = [
      pacote mensal = 6.010,11; PJ a 6% → 6.010,11 ÷ 0,94 = 6.393,74. */
   { nome: '16) Ano CLT de R$ 6.000', obtido: () => cltVersusPJ(6000).liquidoAnual, esperado: 65721.32 },
   { nome: '17) FGTS de R$ 6.000', obtido: () => cltVersusPJ(6000).fgtsAnual, esperado: 6400 },
-  { nome: '18) PJ para empatar R$ 6.000 CLT', obtido: () => cltVersusPJ(6000).faturamentoPJ, esperado: 6393.74 }
+  { nome: '18) PJ para empatar R$ 6.000 CLT', obtido: () => cltVersusPJ(6000).faturamentoPJ, esperado: 6393.74 },
+  /* MEI: DAS de serviços R$ 86,05; faturando R$ 4.000 sobram R$ 3.913,95.
+     Faturando R$ 7.000 o ano dá R$ 84.000, R$ 3.000 acima do limite. */
+  { nome: '19) MEI serviços com R$ 4.000', obtido: () => simularMei(4000, 'servicos').sobra, esperado: 3913.95 },
+  { nome: '20) MEI acima do limite', obtido: () => simularMei(7000, 'comercio').excesso, esperado: 3000 }
 ];
 
 function rodarTesteWhatsApp() {
   // O link wa.me precisa codificar o texto (acentos, espaços e o "R$").
   const url = urlWhatsApp('Simulei meu IR: R$ 100,00 & você?');
   const esperado = 'https://wa.me/?text=' + encodeURIComponent('Simulei meu IR: R$ 100,00 & você?');
-  return { cenario: '19) Link do WhatsApp', esperado, obtido: url, ok: url === esperado };
+  return { cenario: '21) Link do WhatsApp', esperado, obtido: url, ok: url === esperado };
 }
 
 function rodarTestesMensais() {
@@ -1450,7 +1535,7 @@ function rodarTestesMensais() {
   });
   const reverso = brutoParaLiquido(5000);
   resultados.push({
-    cenario: '20) Reverso de R$ 5.000 líquidos',
+    cenario: '22) Reverso de R$ 5.000 líquidos',
     esperado: 'bruto entre 6000 e 6100 e líquido >= 5000',
     obtido: `bruto ${reverso.bruto}, líquido ${reverso.descontos.liquido}`,
     ok: reverso.bruto > 6000 && reverso.bruto < 6100 && reverso.descontos.liquido >= 5000 && reverso.descontos.liquido < 5001
@@ -1477,7 +1562,7 @@ function rodarTestes() {
 const CalculaIR = {
   CONFIG, arredondar, paraAnual, indiceDaFaixa, impostoPelaTabela, reducaoDoImposto,
   descontoSimplificado, deducoesCompletas, calcularOpcao, pontoDeEquilibrio, simular,
-  contribuicaoInss, descontosMensais, brutoParaLiquido, decimoTerceiro, calcularFerias, cltVersusPJ,
+  contribuicaoInss, descontosMensais, brutoParaLiquido, decimoTerceiro, calcularFerias, cltVersusPJ, simularMei,
   textoCompartilhamento, urlWhatsApp,
   rodarTestes, CENARIOS_TESTE, CENARIOS_MENSAIS, gerarImagemResultado
 };

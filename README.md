@@ -19,6 +19,7 @@ Na primeira tela, em "Outras calculadoras grátis":
 - **Salário reverso:** você diz quanto quer tirar de líquido por mês e o site calcula o salário bruto necessário, já descontando INSS (tabela 2026) e IRRF da folha (com a redução da Lei 15.270/2025, que zera o imposto até R$ 5.000).
 - **13º salário e férias:** mostra quanto cai de INSS e IRRF no 13º (tributação exclusiva, com as duas parcelas) e no mês das férias (salário + 1/3 constitucional), comparando com um mês normal.
 - **CLT ou PJ:** soma tudo o que a CLT entrega (11 salários + mês de férias + 13º líquidos, mais o FGTS de 8%) e mostra quanto você precisa faturar como PJ, dada a alíquota do Simples Nacional, para empatar.
+- **MEI: quanto sobra?** faturamento mensal menos o DAS fixo de 2026 (R$ 82,05 comércio, R$ 86,05 serviços, R$ 87,05 os dois), com o peso do DAS, a projeção anual e aviso se passar do limite de R$ 81.000/ano (sobe para R$ 110.000 em 2027).
 
 ## Regras de cálculo
 
