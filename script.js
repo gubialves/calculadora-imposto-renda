@@ -138,8 +138,29 @@ const CONFIG = {
      Mercado Pago, Stripe, Hotmart etc.). Enquanto estiver vazio, o botão só avisa.
      permitirDemo: com true, abrir o site com ?demo=1 mostra o resultado liberado,
      só para você testar. Deixe false em produção. */
+  // TODO(Gabriel): colar o link de checkout em linkPagamento (ainda vazio de propósito).
   plano: { precoMensal: 5, linkPagamento: '', permitirDemo: false }
 };
+
+/* Regras do ANO-CALENDÁRIO 2025 (declaração entregue em 2026), só para o
+   comparativo 2025 x 2026. Mesmo motor de cálculo, outra configuração.
+   Fonte: Receita Federal, "Tributação de 2025" (incidência anual, exercício 2026):
+   https://www.gov.br/receitafederal/pt-br/assuntos/meu-imposto-de-renda/tabelas/2025
+   Em 2025 não existia a redução da Lei 15.270/2025 (vale a partir de 2026).
+   Dependente (R$ 2.275,08) e instrução (R$ 3.561,50) são iguais aos de 2026. */
+const CONFIG_2025 = Object.assign({}, CONFIG, {
+  anoCalendario: 2025,
+  exercicio: 2026,
+  tabelaAnual: [
+    { ate: 28467.20,  aliquota: 0,     deduzir: 0 },
+    { ate: 33919.80,  aliquota: 0.075, deduzir: 2135.04 },
+    { ate: 45012.60,  aliquota: 0.15,  deduzir: 4679.03 },
+    { ate: 55976.16,  aliquota: 0.225, deduzir: 8054.97 },
+    { ate: Infinity,  aliquota: 0.275, deduzir: 10853.78 }
+  ],
+  reducaoAnual: { limiteIsencao: 0, reducaoMaxima: 0, constante: 0, coeficiente: 0, limiteFinal: 0 },
+  simplificado: { percentual: 0.20, tetoAnual: 16754.34 }
+});
 
 
 /* ============================================================================
@@ -556,9 +577,9 @@ const estado = {
 };
 
 /** Converte o estado (mensal ou anual) na entrada anual da função `simular`. */
-function calcularDoEstado() {
+function entradaDoEstado() {
   const f = estado.periodo === 'mensal' ? 12 : 1;
-  return simular({
+  return {
     rendaAnual: estado.renda * f,
     dependentes: estado.dependentes,
     saude: estado.saude * f,
@@ -566,7 +587,11 @@ function calcularDoEstado() {
     previdencia: estado.previdencia * f,
     pensao: estado.pensao * f,
     retido: estado.irrf * f
-  });
+  };
+}
+
+function calcularDoEstado() {
+  return simular(entradaDoEstado());
 }
 
 /* ---------- Campos do passo 2 (textos em linguagem simples) ---------- */
@@ -707,8 +732,8 @@ function irParaPasso(n, { foco = true } = {}) {
 
 /* ---------- Prévia em tempo real (passos 1 e 2) ---------- */
 function textoDaPrevia() {
-  // A estimativa é parte do resultado pago: só aparece para quem tem o plano.
-  if (!estado.assinante || !(estado.renda > 0)) return '';
+  // A estimativa do imposto é grátis; só o detalhe (comparativo, restituição) é pago.
+  if (!(estado.renda > 0)) return '';
   const r = calcularDoEstado();
   const mensal = estado.periodo === 'mensal';
   const por = mensal ? 'por mês' : 'por ano';
@@ -887,22 +912,25 @@ function htmlOpcao(chave, nome, opcao, r, divisor, textoDesconto, extra) {
 }
 
 function renderizarResultado(manterFoco = false) {
-  // Sem o plano, a tela é montada com um EXEMPLO fictício (nunca com os números
-  // da pessoa) e fica embaçada. Assim os valores reais não ficam no código da página.
+  // GRÁTIS: imposto estimado, gráfico, alíquotas e botões de compartilhar.
+  // PAGO: detalhe (comparativo simplificada x completa, ponto de equilíbrio,
+  // restituição). Sem o plano, essa parte é montada com um EXEMPLO fictício
+  // (nunca com os números da pessoa) e fica embaçada. Assim os valores reais
+  // do detalhe não ficam no código da página.
   const bloqueado = !estado.assinante;
-  const r = bloqueado
+  const r = calcularDoEstado();
+  const rd = bloqueado
     ? simular({ rendaAnual: 84000, dependentes: 1, saude: 6000 })
-    : calcularDoEstado();
-  const mensal = bloqueado ? true : estado.visao === 'mensal';
+    : r;
+  const mensal = estado.visao === 'mensal';
   const divisor = mensal ? 12 : 1;
   const unidade = mensal ? 'por mês' : 'por ano';
   const imposto = r.imposto / divisor;
   const sobra = r.sobra / divisor;
-  const semDespesas = r.deducoes.total === 0;
+  
 
-  // Bloqueado: o título do exemplo é só texto (o <h1> verdadeiro está no cartão de desbloqueio).
-  const abreTitulo = bloqueado ? '<p class="headline">' : '<h1 id="t3" class="headline" tabindex="-1">';
-  const fechaTitulo = bloqueado ? '</p>' : '</h1>';
+  const abreTitulo = '<h1 id="t3" class="headline" tabindex="-1">';
+  const fechaTitulo = '</h1>';
   const titulo = r.imposto <= 0
     ? `${abreTitulo}Boa notícia: <span class="valor-destaque verde">você não pagará imposto</span>${fechaTitulo}
        <p class="headline-sub">Com os dados informados, o imposto estimado para ${CONFIG.anoCalendario} é <strong>R$ 0,00</strong>.</p>`
@@ -910,19 +938,45 @@ function renderizarResultado(manterFoco = false) {
        <p class="headline-sub">Estimativa para o ano-calendário ${CONFIG.anoCalendario}, calculada no acerto anual (declaração de ${CONFIG.exercicio}).</p>`;
 
   // Comparativo simplificada x completa
-  const textoSimp = `Desconto automático de 20% da renda (no máximo ${moeda(CONFIG.simplificado.tetoAnual / divisor)} ${unidade}), sem precisar comprovar nada: <strong>${moeda(r.simplificada.deducao / divisor)}</strong>`;
+  const divisorD = bloqueado ? 12 : divisor;
+  const unidadeD = bloqueado ? 'por mês' : unidade;
+  const semDespesas = rd.deducoes.total === 0;
+  const textoSimp = `Desconto automático de 20% da renda (no máximo ${moeda(CONFIG.simplificado.tetoAnual / divisorD)} ${unidadeD}), sem precisar comprovar nada: <strong>${moeda(rd.simplificada.deducao / divisorD)}</strong>`;
   const textoComp = semDespesas
     ? 'Você não informou despesas, então não há o que abater.'
-    : `Soma das suas despesas que abatem imposto: <strong>${moeda(r.completa.deducao / divisor)}</strong>`;
-  const extraComp = r.deducoes.educacaoExcedente > 0
+    : `Soma das suas despesas que abatem imposto: <strong>${moeda(rd.completa.deducao / divisorD)}</strong>`;
+  const extraComp = rd.deducoes.educacaoExcedente > 0
     ? '<p class="opcao-detalhe">Seus gastos com educação passaram do limite, então usamos o valor máximo permitido.</p>'
     : '';
 
-  const nomeMelhor = r.melhor === 'completa' ? 'declaração completa' : 'declaração simplificada';
+  const nomeMelhor = rd.melhor === 'completa' ? 'declaração completa' : 'declaração simplificada';
   let linhaEconomia = '<p class="economia">As duas opções dão o mesmo valor de imposto.</p>';
-  if (r.melhor !== 'empate') {
-    linhaEconomia = `<p class="economia">Escolhendo a ${nomeMelhor}, você paga <strong>${moeda(r.economia / divisor)}</strong> a menos ${unidade}.</p>`;
+  if (rd.melhor !== 'empate') {
+    linhaEconomia = `<p class="economia">Escolhendo a ${nomeMelhor}, você paga <strong>${moeda(rd.economia / divisorD)}</strong> a menos ${unidadeD}.</p>`;
   }
+
+  // Comparativo 2025 x 2026 (mesmo motor, outra configuração). Bloqueado: exemplo fictício.
+  const cmpEntrada = bloqueado ? { rendaAnual: 84000, dependentes: 1, saude: 6000 } : entradaDoEstado();
+  const c25 = simular(cmpEntrada, CONFIG_2025);
+  const c26 = simular(cmpEntrada, CONFIG);
+  const difAnos = arredondar(c25.imposto - c26.imposto);
+  const divisorC = bloqueado ? 12 : divisor;
+  const unidadeC = bloqueado ? 'por mês' : unidade;
+  let linhaAnos = '<p class="economia">Nos dois anos o imposto estimado é o mesmo.</p>';
+  if (difAnos > 0.005) linhaAnos = `<p class="economia">Em 2026 você paga <strong>${moeda(difAnos / divisorC)}</strong> a menos ${unidadeC} do que pagaria em 2025.</p>`;
+  else if (difAnos < -0.005) linhaAnos = `<p class="economia">Em 2026 você paga <strong>${moeda(-difAnos / divisorC)}</strong> a mais ${unidadeC} do que pagaria em 2025.</p>`;
+  const htmlAno = (c, cfg) => `<article class="opcao">
+        <h3 class="opcao-nome">${cfg.anoCalendario}</h3>
+        <p class="opcao-valor">${moeda(c.imposto / divisorC)} <small>${unidadeC}</small></p>
+        <p class="opcao-detalhe">Declaração ${c.melhor === 'completa' ? 'completa' : 'simplificada'} (a que dá menos imposto).${c.reducao > 0 ? ` Redução da lei nova: <strong>${moeda(c.reducao / divisorC)}</strong>.` : ''}</p>
+      </article>`;
+  const blocoAnos = `
+    <section class="bloco" aria-labelledby="h-anos">
+      <h2 class="bloco-titulo" id="h-anos">2025 × 2026: o que mudou pra você</h2>
+      <div class="comparativo">${htmlAno(c25, CONFIG_2025)}${htmlAno(c26, CONFIG)}</div>
+      ${linhaAnos}
+      <p class="dica">Desde 2026, quem ganha até R$ 5 mil por mês fica isento (Lei 15.270/2025). Em 2025 valia só a faixa de isenção da tabela, até cerca de R$ 2.428 por mês.</p>
+    </section>`;
 
   // Faixas
   const faixas = CONFIG.tabelaAnual.map((f, i) =>
@@ -938,7 +992,7 @@ function renderizarResultado(manterFoco = false) {
   // Ponto de equilíbrio: quando a pessoa ainda está melhor na simplificada,
   // mostra a partir de quanto de dedução a completa passaria a compensar.
   let linhaEquilibrio = '';
-  if (!bloqueado && r.melhor !== 'completa') {
+  if (!bloqueado && rd.melhor !== 'completa') {
     const pe = pontoDeEquilibrio(r.rendaAnual);
     if (pe !== null && pe > r.completa.deducao) {
       linhaEquilibrio = `<p class="dica">Vale guardar recibo? Se os seus gastos que abatem imposto passarem de <strong>${moeda(pe / divisor)}</strong> ${unidade}, a declaração completa passa a dar imposto menor que a simplificada. Saúde entra sem limite; educação tem teto por pessoa.</p>`;
@@ -973,7 +1027,17 @@ function renderizarResultado(manterFoco = false) {
     </section>`;
   }
 
-  const fieldsetVisao = bloqueado ? '' : `
+  // Bloqueado: se a pessoa informou o IRRF, mostra só um bloco-exemplo embaçado.
+  if (bloqueado && r.retido > 0) {
+    blocoRestituicao = `
+    <section class="bloco bloco-restituicao" aria-labelledby="h-rest">
+      <h2 class="bloco-titulo" id="h-rest">Restituição ou imposto a pagar</h2>
+      <p class="restituicao-linha">Você deve <strong class="verde-texto">receber de volta cerca de R$ 1.234,56</strong> por ano</p>
+      <p class="dica">Já descontaram R$ 5.678,90 do seu salário. A diferença volta para você na restituição.</p>
+    </section>`;
+  }
+
+  const fieldsetVisao = `
     <fieldset class="periodo visao">
       <legend class="sr-only">Mostrar valores por</legend>
       <label class="segmento"><input type="radio" name="visao" value="mensal"${mensal ? ' checked' : ''}><span>Por mês</span></label>
@@ -982,20 +1046,17 @@ function renderizarResultado(manterFoco = false) {
 
   const preco = moeda(CONFIG.plano.precoMensal);
   const cartaoDesbloqueio = `
-    <div class="trava-card" role="region" aria-labelledby="t3">
+    <div class="trava-card" role="region" aria-labelledby="t3-trava">
       <svg class="icone trava-icone" aria-hidden="true"><use href="#i-lock"/></svg>
-      <h1 id="t3" class="trava-titulo" tabindex="-1">Seu resultado está pronto</h1>
-      <p>Veja quanto você paga de imposto, qual declaração compensa mais e suas alíquotas.</p>
+      <h2 id="t3-trava" class="trava-titulo">Quer o detalhe?</h2>
+      <p>Veja qual declaração compensa mais (simplificada ou completa), a partir de quanto de recibo vale a completa e quanto você recebe de restituição.</p>
       <p class="trava-preco"><strong>${preco}</strong> por mês</p>
       <button type="button" class="btn btn-primario" id="btn-desbloquear">Desbloquear por ${preco}/mês</button>
     </div>`;
 
   $('#resultado').innerHTML = `
-    <div class="trava">
-    <div class="resultado-conteudo${bloqueado ? ' bloqueado' : ''}"${bloqueado ? ' aria-hidden="true" inert' : ''}>
     ${titulo}
     ${fieldsetVisao}
-    ${blocoRestituicao}
 
     <section class="bloco" aria-labelledby="h-rosca">
       <h2 class="bloco-titulo" id="h-rosca">Para onde vai o seu dinheiro</h2>
@@ -1007,16 +1068,6 @@ function renderizarResultado(manterFoco = false) {
         </ul>
       </div>
       <p class="dica">Considera só o imposto de renda sobre o valor bruto informado. Outros descontos, como INSS, não entram nesta conta.</p>
-    </section>
-
-    <section class="bloco" aria-labelledby="h-comp">
-      <h2 class="bloco-titulo" id="h-comp">Declaração simplificada ou completa?</h2>
-      <div class="comparativo">
-        ${htmlOpcao('simplificada', 'Declaração simplificada', r.simplificada, r, divisor, textoSimp)}
-        ${htmlOpcao('completa', 'Declaração completa', r.completa, r, divisor, textoComp, extraComp)}
-      </div>
-      ${linhaEconomia}
-      ${linhaEquilibrio}
     </section>
 
     <section class="bloco" aria-labelledby="h-aliq">
@@ -1037,12 +1088,27 @@ function renderizarResultado(manterFoco = false) {
     </section>
 
     ${aviso}
+
+    <div class="trava${bloqueado ? ' trava-bloqueada' : ''}">
+    <div class="resultado-conteudo${bloqueado ? ' bloqueado' : ''}"${bloqueado ? ' aria-hidden="true" inert' : ''}>
+    ${blocoRestituicao}
+
+    <section class="bloco" aria-labelledby="h-comp">
+      <h2 class="bloco-titulo" id="h-comp">Declaração simplificada ou completa?</h2>
+      <div class="comparativo">
+        ${htmlOpcao('simplificada', 'Declaração simplificada', rd.simplificada, rd, divisorD, textoSimp)}
+        ${htmlOpcao('completa', 'Declaração completa', rd.completa, rd, divisorD, textoComp, extraComp)}
+      </div>
+      ${linhaEconomia}
+      ${linhaEquilibrio}
+    </section>
+    ${blocoAnos}
     </div>
     ${bloqueado ? cartaoDesbloqueio : ''}
     </div>
 
     <div class="resultado-acoes">
-      ${bloqueado ? '' : `<button type="button" class="btn btn-zap" id="btn-zap">
+      <button type="button" class="btn btn-zap" id="btn-zap">
         <svg class="icone" aria-hidden="true"><use href="#i-whatsapp"/></svg>Mandar no WhatsApp
       </button>
       <button type="button" class="btn btn-primario" id="btn-compartilhar">
@@ -1050,7 +1116,10 @@ function renderizarResultado(manterFoco = false) {
       </button>
       <button type="button" class="btn btn-secundario" id="btn-imagem">
         <svg class="icone" aria-hidden="true"><use href="#i-image"/></svg>Baixar imagem pra stories
-      </button>`}
+      </button>
+      <button type="button" class="btn btn-secundario" id="btn-pdf">
+        <svg class="icone" aria-hidden="true"><use href="#i-receipt"/></svg>Salvar em PDF
+      </button>
       <button type="button" class="btn btn-secundario" id="btn-refazer">
         <svg class="icone" aria-hidden="true"><use href="#i-refresh"/></svg>Refazer simulação
       </button>
@@ -1082,6 +1151,7 @@ function renderizarResultado(manterFoco = false) {
   if (btnZap) btnZap.addEventListener('click', () => compartilharWhatsApp(r));
   const btnCompartilhar = $('#btn-compartilhar');
   if (btnCompartilhar) btnCompartilhar.addEventListener('click', () => compartilhar(r));
+  $('#btn-pdf').addEventListener('click', exportarPdf);
   const btnImagem = $('#btn-imagem');
   if (btnImagem) btnImagem.addEventListener('click', () => baixarImagem(r));
   const btnDesbloquear = $('#btn-desbloquear');
@@ -1096,6 +1166,16 @@ function desbloquear() {
   } else {
     avisoRapido('O pagamento ainda não foi configurado. Defina plano.linkPagamento no CONFIG do script.js.');
   }
+}
+
+/** Abre a impressão do navegador; lá a pessoa escolhe "Salvar como PDF".
+    O CSS de impressão (@media print) deixa só o resultado na página. */
+function exportarPdf() {
+  const data = new Date().toLocaleDateString('pt-BR');
+  document.body.setAttribute('data-impresso-em', 'Simulação feita em ' + data + ' no Calcula IR');
+  const limpar = () => { document.body.removeAttribute('data-impresso-em'); window.removeEventListener('afterprint', limpar); };
+  window.addEventListener('afterprint', limpar);
+  window.print();
 }
 
 function refazer() {
@@ -1744,6 +1824,11 @@ function rodarTestes() {
     return { cenario: c.nome, esperado: `${c.esperado.imposto} (${c.esperado.melhor})`, obtido: `${r.imposto} (${r.melhor})`, ok };
   });
   resultados.push(rodarTesteEquilibrio());
+  const a25 = simular({ rendaAnual: 72000 }, CONFIG_2025);
+  resultados.push({
+    cenario: '23) R$ 72.000/ano em 2025 (sem a redução da Lei 15.270)',
+    esperado: '4986.22', obtido: String(a25.imposto), ok: Math.abs(a25.imposto - 4986.22) < 0.015
+  });
   const cl1 = carneLeao({ rendimento: 4000 });
   const cl2 = carneLeao({ rendimento: 6000 });
   resultados.push({

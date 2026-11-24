@@ -326,7 +326,7 @@ a { color: var(--azul-700); }
   user-select: none; -webkit-user-select: none; pointer-events: none;
 }
 .trava-card {
-  position: absolute; left: 50%; top: 72px; transform: translateX(-50%);
+  position: absolute; left: 0; right: 0; margin: 0 auto; top: 56px;
   width: calc(100% - 16px); max-width: 380px; text-align: center;
   background: var(--branco); border: 1px solid var(--borda); border-radius: var(--raio);
   box-shadow: 0 12px 40px rgba(20, 35, 95, .22); padding: 24px 20px;
@@ -416,3 +416,14 @@ fieldset.campo { border: 1px solid var(--borda); }
 .faq details { border-bottom: 1px solid var(--borda); padding: 10px 0; }
 .faq summary { cursor: pointer; font-weight: 600; color: var(--azul-900); }
 .faq details p { margin: 8px 0 0; color: var(--texto-suave); font-size: .9375rem; }
+
+/* ---------- Impressão / PDF do resultado ---------- */
+@media print {
+  body { background: #fff !important; }
+  .pular-link, .progresso, .resultado-acoes, .ferramentas, .privacidade, .faq, .toast, .rodape,
+  .trava-bloqueada, .sprite, .topo, .visao { display: none !important; }
+  body::before { content: 'Calcula IR – Calculadora de Imposto de Renda'; display: block; font-weight: 800; font-size: 1.25rem; margin-bottom: 4px; }
+  body::after { content: attr(data-impresso-em) ' · Simulação informativa, não substitui a declaração oficial da Receita Federal.'; display: block; margin-top: 16px; font-size: .8125rem; color: #444; }
+  .bloco, .opcao { break-inside: avoid; }
+  * { box-shadow: none !important; animation: none !important; }
+}
