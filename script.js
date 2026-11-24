@@ -296,6 +296,49 @@ function simular(entrada, cfg = CONFIG) {
 
 
 /**
+ * Carnê-leão: imposto mensal de quem recebe de pessoa física (autônomo,
+ * aluguel, etc.) sem retenção na fonte. Usa a tabela MENSAL do ano e a
+ * redução da Lei 15.270/2025 (rendimento até R$ 5.000 zera o imposto).
+ * Deduções aceitas: livro-caixa (limitado ao rendimento do mês), INSS pago,
+ * dependentes e pensão alimentícia. O desconto simplificado de R$ 607,20
+ * vale no lugar das deduções quando for maior.
+ * Fonte: https://www.gov.br/receitafederal/pt-br/assuntos/meu-imposto-de-renda/pagamento/carne-leao/pagar
+ * DARF código 0190, vence no último dia útil do mês seguinte; abaixo de R$ 10 não se paga.
+ */
+function carneLeao(e, cfg = CONFIG) {
+  const rendimento = Math.max(0, Number(e.rendimento) || 0);
+  const positivo = (x) => Math.max(0, Number(x) || 0);
+  const livroCaixa = Math.min(positivo(e.livroCaixa), rendimento);
+  const inss = positivo(e.inss);
+  const pensao = positivo(e.pensao);
+  const dep = Math.min(cfg.limites.maxDependentes, Math.max(0, Math.floor(e.dependentes || 0)));
+  const legais = arredondar(livroCaixa + inss + pensao + dep * cfg.irrfMensal.dependente);
+  const simplificado = cfg.irrfMensal.descontoSimplificado;
+  const usouSimplificado = simplificado > legais;
+  const deducao = Math.min(rendimento, Math.max(legais, simplificado));
+  const base = arredondar(rendimento - deducao);
+
+  const f = cfg.tabelaMensal.find((x) => base <= x.ate) || cfg.tabelaMensal[cfg.tabelaMensal.length - 1];
+  const impostoTabela = arredondar(Math.max(0, base * f.aliquota - f.deduzir));
+
+  const r = cfg.irrfMensal.reducao;
+  let reducaoBruta = 0;
+  if (rendimento <= r.limiteIsencao) reducaoBruta = r.reducaoMaxima;
+  else if (rendimento <= r.limiteFinal) reducaoBruta = r.constante - r.coeficiente * rendimento;
+  const reducao = arredondar(Math.min(Math.max(0, reducaoBruta), impostoTabela));
+  const imposto = arredondar(Math.max(0, impostoTabela - reducao));
+  const dispensado = imposto < 10; // DARF abaixo de R$ 10 não é recolhido (acumula)
+
+  return {
+    rendimento, livroCaixa, inss, pensao, dependentes: dep,
+    deducao: arredondar(deducao), usouSimplificado, base,
+    impostoTabela, reducao, imposto, dispensado,
+    aliquotaEfetiva: rendimento > 0 ? imposto / rendimento : 0,
+    sobra: arredondar(rendimento - imposto)
+  };
+}
+
+/**
  * Contribuição mensal ao INSS de um salário CLT, pela tabela progressiva
  * de 2026 (parcela a deduzir chega ao mesmo resultado da conta faixa a faixa).
  * Acima do teto, a contribuição para de crescer.
@@ -1241,6 +1284,58 @@ function iniciarFerramentas() {
   iniciarDecimoFerias();
   iniciarCltPJ();
   iniciarMei();
+  iniciarCarneLeao();
+}
+
+/* ---------- Ferramenta: Carnê-leão (autônomo) ---------- */
+function renderizarCarneLeao(r) {
+  const aviso = r.dispensado && r.imposto > 0
+    ? `<div class="aviso" role="note"><svg class="icone" aria-hidden="true"><use href="#i-info"/></svg>
+         <p style="margin:0">O imposto do mês ficou abaixo de R$ 10,00, valor mínimo para pagar o DARF. Ele se soma ao imposto dos meses seguintes até chegar nesse valor.</p></div>`
+    : '';
+  const titulo = r.imposto <= 0
+    ? `<h2 class="bloco-titulo" id="h-cl">Nesse mês não tem carnê-leão a pagar</h2>
+       <p class="headline"><span class="valor-destaque verde">R$ 0,00</span> de imposto</p>`
+    : `<h2 class="bloco-titulo" id="h-cl">Seu carnê-leão do mês</h2>
+       <p class="headline"><span class="valor-destaque">${moeda(r.imposto)}</span> de imposto</p>`;
+  $('#cl-saida').innerHTML = `
+    <section class="bloco" aria-labelledby="h-cl">
+      ${titulo}
+      <div class="explica">
+        ${linhaExplica('Rendimento do mês', moeda(r.rendimento), 'Tudo o que você recebeu de pessoas físicas ou do exterior, sem imposto retido na fonte.')}
+        ${linhaExplica(r.usouSimplificado ? 'Desconto simplificado' : 'Deduções', '− ' + moeda(r.deducao), r.usouSimplificado
+          ? 'As suas deduções somam menos que R$ 607,20, então vale o desconto simplificado, que é maior.'
+          : 'Livro-caixa, INSS, dependentes e pensão alimentícia que você informou.')}
+        ${linhaExplica('Base de cálculo', moeda(r.base), 'Valor sobre o qual a tabela mensal é aplicada.')}
+        ${linhaExplica('Redução da lei nova', r.reducao > 0 ? '− ' + moeda(r.reducao) : moeda(0), 'Desde 2026, rendimentos de até R$ 5.000 no mês ficam sem imposto (Lei 15.270/2025). Entre R$ 5.000 e R$ 7.350 a redução diminui aos poucos.')}
+        ${linhaExplica('Fica com você', moeda(r.sobra), 'Rendimento menos o carnê-leão. Não conta o INSS nem outras despesas.')}
+      </div>
+      ${aviso}
+      <p class="dica">Pague com DARF código <strong>0190</strong> até o último dia útil do mês seguinte ao do recebimento. Você pode gerar o DARF no Carnê-Leão Web, no e-CAC da Receita Federal. Estimativa informativa: confira no programa oficial.</p>
+    </section>`;
+}
+
+function iniciarCarneLeao() {
+  const campos = [['cl-rendimento', 'rendimento'], ['cl-livro', 'livroCaixa'], ['cl-inss', 'inss'], ['cl-pensao', 'pensao']];
+  const v = { rendimento: 0, livroCaixa: 0, inss: 0, pensao: 0, dependentes: 0 };
+  const erro = $('#cl-erro');
+  campos.forEach(([id, chave]) => {
+    ligarMascaraMoeda($('#' + id), (valor) => {
+      v[chave] = valor;
+      if (chave === 'rendimento' && valor > 0) { erro.textContent = ''; erro.hidden = true; }
+    });
+  });
+  ligarContador($('#cl-dependentes'), (n) => { v.dependentes = n; }, { max: CONFIG.limites.maxDependentes });
+  $('#form-carne').addEventListener('submit', (ev) => {
+    ev.preventDefault();
+    if (!(v.rendimento > 0)) {
+      erro.textContent = 'Digite quanto você recebeu no mês para calcular.';
+      erro.hidden = false;
+      $('#cl-rendimento').focus();
+      return;
+    }
+    renderizarCarneLeao(carneLeao(v));
+  });
 }
 
 /* ---------- Ferramenta: MEI ---------- */
@@ -1596,6 +1691,13 @@ function rodarTestes() {
     return { cenario: c.nome, esperado: `${c.esperado.imposto} (${c.esperado.melhor})`, obtido: `${r.imposto} (${r.melhor})`, ok };
   });
   resultados.push(rodarTesteEquilibrio());
+  const cl1 = carneLeao({ rendimento: 4000 });
+  const cl2 = carneLeao({ rendimento: 6000 });
+  resultados.push({
+    cenario: '24) Carnê-leão: R$ 4.000 (isento pela redução) e R$ 6.000 (base 5.392,80, imposto 574,29 menos redução 179,75)',
+    esperado: '0 e 394,54', obtido: `${cl1.imposto} e ${cl2.imposto}`,
+    ok: cl1.imposto === 0 && Math.abs(cl2.imposto - 394.54) < 0.015
+  });
   resultados.push(...rodarTestesMensais());
   resultados.push(rodarTesteWhatsApp());
   if (typeof console !== 'undefined' && console.table) console.table(resultados);
@@ -1607,7 +1709,7 @@ function rodarTestes() {
 const CalculaIR = {
   CONFIG, arredondar, paraAnual, indiceDaFaixa, impostoPelaTabela, reducaoDoImposto,
   descontoSimplificado, deducoesCompletas, calcularOpcao, pontoDeEquilibrio, simular,
-  contribuicaoInss, descontosMensais, brutoParaLiquido, decimoTerceiro, calcularFerias, cltVersusPJ, simularMei,
+  contribuicaoInss, descontosMensais, brutoParaLiquido, decimoTerceiro, calcularFerias, cltVersusPJ, simularMei, carneLeao,
   textoCompartilhamento, urlWhatsApp,
   rodarTestes, CENARIOS_TESTE, CENARIOS_MENSAIS, gerarImagemResultado
 };

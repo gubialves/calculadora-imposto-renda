@@ -123,6 +123,14 @@
               </span>
               <svg class="icone seta" aria-hidden="true"><use href="#i-arrow-right"/></svg>
             </button>
+            <button type="button" class="ferramenta" data-ferramenta="carne">
+              <svg class="icone" aria-hidden="true"><use href="#i-coins"/></svg>
+              <span class="ferramenta-textos">
+                <span class="ferramenta-nome">Carnê-leão (autônomo)</span>
+                <span class="ferramenta-desc">Quanto pagar de imposto por mês sobre o que recebe de pessoa física</span>
+              </span>
+              <svg class="icone seta" aria-hidden="true"><use href="#i-arrow-right"/></svg>
+            </button>
             <button type="button" class="ferramenta" data-ferramenta="cltpj">
               <svg class="icone" aria-hidden="true"><use href="#i-briefcase"/></svg>
               <span class="ferramenta-textos">
@@ -299,6 +307,67 @@
       </section>
 
       <!-- FERRAMENTA: MEI -->
+      <section id="tela-carne" class="passo" data-tela="carne" aria-labelledby="t-carne" hidden>
+        <form id="form-carne" novalidate>
+          <h1 id="t-carne" class="titulo" tabindex="-1">Carnê-leão: imposto de quem é autônomo</h1>
+          <p class="subtitulo">Recebe de pessoa física ou do exterior, sem imposto retido? Veja quanto pagar de <strong>carnê-leão</strong> no mês (regras de 2026).</p>
+
+          <div class="campo-valor">
+            <label for="cl-rendimento" class="rotulo">Quanto você recebeu no mês</label>
+            <div class="entrada-grande">
+              <span class="prefixo" aria-hidden="true">R$</span>
+              <input id="cl-rendimento" type="text" inputmode="numeric" autocomplete="off" placeholder="0,00" aria-describedby="cl-erro">
+            </div>
+            <p id="cl-erro" class="erro" role="alert" hidden></p>
+          </div>
+
+          <div class="campo-valor">
+            <label for="cl-livro" class="rotulo">Despesas do livro-caixa (opcional)</label>
+            <div class="entrada-grande">
+              <span class="prefixo" aria-hidden="true">R$</span>
+              <input id="cl-livro" type="text" inputmode="numeric" autocomplete="off" placeholder="0,00">
+            </div>
+            <p class="dica">Só para autônomo: aluguel do consultório, material, internet do trabalho. Fica limitado ao que você recebeu no mês.</p>
+          </div>
+          <div class="campo-valor">
+            <label for="cl-inss" class="rotulo">INSS que você pagou (opcional)</label>
+            <div class="entrada-grande">
+              <span class="prefixo" aria-hidden="true">R$</span>
+              <input id="cl-inss" type="text" inputmode="numeric" autocomplete="off" placeholder="0,00">
+            </div>
+            <p class="dica">Contribuição à previdência oficial no mês.</p>
+          </div>
+          <div class="campo-valor">
+            <label for="cl-pensao" class="rotulo">Pensão alimentícia paga (opcional)</label>
+            <div class="entrada-grande">
+              <span class="prefixo" aria-hidden="true">R$</span>
+              <input id="cl-pensao" type="text" inputmode="numeric" autocomplete="off" placeholder="0,00">
+            </div>
+            <p class="dica">Só a que vem de decisão judicial ou acordo homologado.</p>
+          </div>
+
+          <div class="campo campo-linha">
+            <label class="campo-rotulo" for="cl-dependentes">Dependentes para o imposto</label>
+            <div class="contador">
+              <button type="button" data-passo="-1" aria-label="Diminuir o número de dependentes">−</button>
+              <input id="cl-dependentes" class="contador-valor" type="text" inputmode="numeric" pattern="[0-9]*" autocomplete="off" value="0">
+              <button type="button" data-passo="1" aria-label="Aumentar o número de dependentes">+</button>
+            </div>
+          </div>
+
+          <div class="acoes">
+            <button class="btn btn-primario" type="submit">
+              Calcular carnê-leão
+              <svg class="icone" aria-hidden="true"><use href="#i-arrow-right"/></svg>
+            </button>
+            <button class="btn btn-texto" type="button" data-voltar>
+              <svg class="icone" aria-hidden="true"><use href="#i-arrow-left"/></svg>
+              Voltar
+            </button>
+          </div>
+        </form>
+        <div id="cl-saida" class="ferramenta-saida" aria-live="polite"></div>
+      </section>
       <section id="tela-mei" class="passo" data-tela="mei" aria-labelledby="t-mei" hidden>
         <form id="form-mei" novalidate>
           <h1 id="t-mei" class="titulo" tabindex="-1">MEI: quanto sobra depois do DAS?</h1>
