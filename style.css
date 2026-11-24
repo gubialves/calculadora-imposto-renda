@@ -409,3 +409,14 @@ a { color: var(--azul-700); }
 .periodo.tres { grid-template-columns: 1fr 1fr 1fr; }
 fieldset.campo { border: 1px solid var(--borda); }
 .legenda-campo { padding: 0 6px; }
+
+/* ---------- Impressão / PDF do resultado ---------- */
+@media print {
+  body { background: #fff !important; }
+  .pular-link, .progresso, .resultado-acoes, .ferramentas, .privacidade, .faq, .toast, .rodape,
+  .trava-bloqueada, .sprite, .topo, .visao { display: none !important; }
+  body::before { content: 'Calcula IR – Calculadora de Imposto de Renda'; display: block; font-weight: 800; font-size: 1.25rem; margin-bottom: 4px; }
+  body::after { content: attr(data-impresso-em) ' · Simulação informativa, não substitui a declaração oficial da Receita Federal.'; display: block; margin-top: 16px; font-size: .8125rem; color: #444; }
+  .bloco, .opcao { break-inside: avoid; }
+  * { box-shadow: none !important; animation: none !important; }
+}

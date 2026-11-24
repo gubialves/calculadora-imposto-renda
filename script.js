@@ -1003,7 +1003,7 @@ function renderizarResultado(manterFoco = false) {
 
     ${aviso}
 
-    <div class="trava">
+    <div class="trava${bloqueado ? ' trava-bloqueada' : ''}">
     <div class="resultado-conteudo${bloqueado ? ' bloqueado' : ''}"${bloqueado ? ' aria-hidden="true" inert' : ''}>
     ${blocoRestituicao}
 
@@ -1030,6 +1030,9 @@ function renderizarResultado(manterFoco = false) {
       </button>
       <button type="button" class="btn btn-secundario" id="btn-imagem">
         <svg class="icone" aria-hidden="true"><use href="#i-image"/></svg>Baixar imagem pra stories
+      </button>
+      <button type="button" class="btn btn-secundario" id="btn-pdf">
+        <svg class="icone" aria-hidden="true"><use href="#i-receipt"/></svg>Salvar em PDF
       </button>
       <button type="button" class="btn btn-secundario" id="btn-refazer">
         <svg class="icone" aria-hidden="true"><use href="#i-refresh"/></svg>Refazer simulação
@@ -1062,6 +1065,7 @@ function renderizarResultado(manterFoco = false) {
   if (btnZap) btnZap.addEventListener('click', () => compartilharWhatsApp(r));
   const btnCompartilhar = $('#btn-compartilhar');
   if (btnCompartilhar) btnCompartilhar.addEventListener('click', () => compartilhar(r));
+  $('#btn-pdf').addEventListener('click', exportarPdf);
   const btnImagem = $('#btn-imagem');
   if (btnImagem) btnImagem.addEventListener('click', () => baixarImagem(r));
   const btnDesbloquear = $('#btn-desbloquear');
@@ -1076,6 +1080,16 @@ function desbloquear() {
   } else {
     avisoRapido('O pagamento ainda não foi configurado. Defina plano.linkPagamento no CONFIG do script.js.');
   }
+}
+
+/** Abre a impressão do navegador; lá a pessoa escolhe "Salvar como PDF".
+    O CSS de impressão (@media print) deixa só o resultado na página. */
+function exportarPdf() {
+  const data = new Date().toLocaleDateString('pt-BR');
+  document.body.setAttribute('data-impresso-em', 'Simulação feita em ' + data + ' no Calcula IR');
+  const limpar = () => { document.body.removeAttribute('data-impresso-em'); window.removeEventListener('afterprint', limpar); };
+  window.addEventListener('afterprint', limpar);
+  window.print();
 }
 
 function refazer() {
