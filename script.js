@@ -708,8 +708,44 @@ function restaurarSimulacao() {
   $('#f-dependentes').value = String(estado.dependentes);
 }
 
+/* ---------- Rotas por hash (#passo-1, #passo-2, #passo-3, #mei...) ----------
+   Cada tela vira uma entrada no histórico: o botão voltar do celular
+   volta ao passo anterior em vez de sair do site. */
+let aplicandoRota = false;
+let primeiraRota = true;
+
+function registrarRota(hash) {
+  if (window.location.hash === hash) { primeiraRota = false; return; }
+  try {
+    // Ao aplicar uma rota existente (voltar/avançar) só corrige a URL, sem nova entrada.
+    if (primeiraRota || aplicandoRota) history.replaceState(null, '', hash);
+    else history.pushState(null, '', hash);
+  } catch (e) { /* file:// ou ambiente sem history: ignora */ }
+  primeiraRota = false;
+}
+
+function aplicarRotaDoHash() {
+  const hash = window.location.hash.replace(/^#/, '');
+  aplicandoRota = true;
+  try {
+    const passo = /^passo-([123])$/.exec(hash);
+    if (passo) {
+      const n = Number(passo[1]);
+      // Passos 2 e 3 só fazem sentido com a renda preenchida.
+      irParaPasso(n > 1 && !(estado.renda > 0) ? 1 : n, { foco: false });
+    } else if (hash && document.getElementById('tela-' + hash)) {
+      mostrarFerramenta(hash, { foco: false });
+    } else {
+      irParaPasso(1, { foco: false });
+    }
+  } finally {
+    aplicandoRota = false;
+  }
+}
+
 /* ---------- Navegação entre os passos ---------- */
 function irParaPasso(n, { foco = true } = {}) {
+  registrarRota('#passo-' + n);
   estado.passo = n;
   [1, 2, 3].forEach((i) => { $('#passo-' + i).hidden = i !== n; });
   $$('[data-tela]').forEach((s) => { s.hidden = true; });
@@ -1328,13 +1364,14 @@ async function compartilhar(r) {
 /* ---------- Ferramentas (outras calculadoras) ---------- */
 
 /** Mostra a tela de uma ferramenta e esconde o passo a passo principal. */
-function mostrarFerramenta(id) {
+function mostrarFerramenta(id, { foco = true } = {}) {
+  registrarRota('#' + id);
   [1, 2, 3].forEach((i) => { $('#passo-' + i).hidden = true; });
   $$('[data-tela]').forEach((s) => { s.hidden = s.dataset.tela !== id; });
   $('.progresso').hidden = true;
   window.scrollTo({ top: 0, behavior: prefereMenosMovimento() ? 'auto' : 'smooth' });
   const titulo = $('#tela-' + id + ' h1');
-  if (titulo) titulo.focus({ preventScroll: true });
+  if (titulo && foco) titulo.focus({ preventScroll: true });
 }
 
 /** Contador (+/−) genérico usado pelas ferramentas. */
@@ -1693,7 +1730,8 @@ function iniciar() {
   iniciarFerramentas();
   restaurarSimulacao();
   atualizarTextosDoPeriodo();
-  irParaPasso(1, { foco: false });
+  aplicarRotaDoHash();
+  window.addEventListener('popstate', aplicarRotaDoHash);
   window.scrollTo(0, 0);
 }
 
