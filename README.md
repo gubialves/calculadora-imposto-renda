@@ -122,7 +122,7 @@ O cálculo roda inteiramente no navegador. O site não coleta nem envia os valor
 
 1. Vá em **Settings → Pages**.
 2. Em *Source*, escolha **Deploy from a branch**, branch `main` e pasta `/ (root)`.
-3. Aguarde 1 a 2 minutos. O site ficará em `https://gabriel434henrique-cell.github.io/calculadora-imposto-renda/`.
+3. Aguarde 1 a 2 minutos. O site ficará em `https://gubialves.github.io/calculadora-imposto-renda/`.
 
 ## Fontes
 
@@ -132,7 +132,7 @@ O cálculo roda inteiramente no navegador. O site não coleta nem envia os valor
 ## Autor
 
 Gabriel Henrique Alves de Souza
-[GitHub](https://github.com/gabriel434henrique-cell) · [LinkedIn](https://www.linkedin.com/in/gabriel-henrique-alves-5b13872a7)
+[GitHub](https://github.com/gubialves) · [LinkedIn](https://www.linkedin.com/in/gabriel-henrique-alves-5b13872a7)
 
 ## Licença
 
