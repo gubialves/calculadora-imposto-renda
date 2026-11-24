@@ -137,8 +137,8 @@ const CONFIG = {
      linkPagamento: cole aqui o link de checkout/assinatura (Pix recorrente,
      Mercado Pago, Stripe, Hotmart etc.). Enquanto estiver vazio, o botão só avisa.
      permitirDemo: com true, abrir o site com ?demo=1 mostra o resultado liberado,
-     só para você testar. Coloque false antes de publicar. */
-  plano: { precoMensal: 5, linkPagamento: '', permitirDemo: true }
+     só para você testar. Deixe false em produção. */
+  plano: { precoMensal: 5, linkPagamento: '', permitirDemo: false }
 };
 
 
