@@ -142,6 +142,26 @@ const CONFIG = {
   plano: { precoMensal: 5, linkPagamento: '', permitirDemo: true }
 };
 
+/* Regras do ANO-CALENDÁRIO 2025 (declaração entregue em 2026), só para o
+   comparativo 2025 x 2026. Mesmo motor de cálculo, outra configuração.
+   Fonte: Receita Federal, "Tributação de 2025" (incidência anual, exercício 2026):
+   https://www.gov.br/receitafederal/pt-br/assuntos/meu-imposto-de-renda/tabelas/2025
+   Em 2025 não existia a redução da Lei 15.270/2025 (vale a partir de 2026).
+   Dependente (R$ 2.275,08) e instrução (R$ 3.561,50) são iguais aos de 2026. */
+const CONFIG_2025 = Object.assign({}, CONFIG, {
+  anoCalendario: 2025,
+  exercicio: 2026,
+  tabelaAnual: [
+    { ate: 28467.20,  aliquota: 0,     deduzir: 0 },
+    { ate: 33919.80,  aliquota: 0.075, deduzir: 2135.04 },
+    { ate: 45012.60,  aliquota: 0.15,  deduzir: 4679.03 },
+    { ate: 55976.16,  aliquota: 0.225, deduzir: 8054.97 },
+    { ate: Infinity,  aliquota: 0.275, deduzir: 10853.78 }
+  ],
+  reducaoAnual: { limiteIsencao: 0, reducaoMaxima: 0, constante: 0, coeficiente: 0, limiteFinal: 0 },
+  simplificado: { percentual: 0.20, tetoAnual: 16754.34 }
+});
+
 
 /* ============================================================================
    2) CÁLCULO – funções puras (sem acesso à tela)
@@ -514,9 +534,9 @@ const estado = {
 };
 
 /** Converte o estado (mensal ou anual) na entrada anual da função `simular`. */
-function calcularDoEstado() {
+function entradaDoEstado() {
   const f = estado.periodo === 'mensal' ? 12 : 1;
-  return simular({
+  return {
     rendaAnual: estado.renda * f,
     dependentes: estado.dependentes,
     saude: estado.saude * f,
@@ -524,7 +544,11 @@ function calcularDoEstado() {
     previdencia: estado.previdencia * f,
     pensao: estado.pensao * f,
     retido: estado.irrf * f
-  });
+  };
+}
+
+function calcularDoEstado() {
+  return simular(entradaDoEstado());
 }
 
 /* ---------- Campos do passo 2 (textos em linguagem simples) ---------- */
@@ -845,6 +869,29 @@ function renderizarResultado(manterFoco = false) {
     linhaEconomia = `<p class="economia">Escolhendo a ${nomeMelhor}, você paga <strong>${moeda(rd.economia / divisorD)}</strong> a menos ${unidadeD}.</p>`;
   }
 
+  // Comparativo 2025 x 2026 (mesmo motor, outra configuração). Bloqueado: exemplo fictício.
+  const cmpEntrada = bloqueado ? { rendaAnual: 84000, dependentes: 1, saude: 6000 } : entradaDoEstado();
+  const c25 = simular(cmpEntrada, CONFIG_2025);
+  const c26 = simular(cmpEntrada, CONFIG);
+  const difAnos = arredondar(c25.imposto - c26.imposto);
+  const divisorC = bloqueado ? 12 : divisor;
+  const unidadeC = bloqueado ? 'por mês' : unidade;
+  let linhaAnos = '<p class="economia">Nos dois anos o imposto estimado é o mesmo.</p>';
+  if (difAnos > 0.005) linhaAnos = `<p class="economia">Em 2026 você paga <strong>${moeda(difAnos / divisorC)}</strong> a menos ${unidadeC} do que pagaria em 2025.</p>`;
+  else if (difAnos < -0.005) linhaAnos = `<p class="economia">Em 2026 você paga <strong>${moeda(-difAnos / divisorC)}</strong> a mais ${unidadeC} do que pagaria em 2025.</p>`;
+  const htmlAno = (c, cfg) => `<article class="opcao">
+        <h3 class="opcao-nome">${cfg.anoCalendario}</h3>
+        <p class="opcao-valor">${moeda(c.imposto / divisorC)} <small>${unidadeC}</small></p>
+        <p class="opcao-detalhe">Declaração ${c.melhor === 'completa' ? 'completa' : 'simplificada'} (a que dá menos imposto).${c.reducao > 0 ? ` Redução da lei nova: <strong>${moeda(c.reducao / divisorC)}</strong>.` : ''}</p>
+      </article>`;
+  const blocoAnos = `
+    <section class="bloco" aria-labelledby="h-anos">
+      <h2 class="bloco-titulo" id="h-anos">2025 × 2026: o que mudou pra você</h2>
+      <div class="comparativo">${htmlAno(c25, CONFIG_2025)}${htmlAno(c26, CONFIG)}</div>
+      ${linhaAnos}
+      <p class="dica">Desde 2026, quem ganha até R$ 5 mil por mês fica isento (Lei 15.270/2025). Em 2025 valia só a faixa de isenção da tabela, até cerca de R$ 2.428 por mês.</p>
+    </section>`;
+
   // Faixas
   const faixas = CONFIG.tabelaAnual.map((f, i) =>
     `<li${i === r.faixa ? ' aria-current="true"' : ''}>${f.aliquota === 0 ? 'Isento' : percentual(f.aliquota)}</li>`).join('');
@@ -969,6 +1016,7 @@ function renderizarResultado(manterFoco = false) {
       ${linhaEconomia}
       ${linhaEquilibrio}
     </section>
+    ${blocoAnos}
     </div>
     ${bloqueado ? cartaoDesbloqueio : ''}
     </div>
@@ -1569,6 +1617,11 @@ function rodarTestes() {
     return { cenario: c.nome, esperado: `${c.esperado.imposto} (${c.esperado.melhor})`, obtido: `${r.imposto} (${r.melhor})`, ok };
   });
   resultados.push(rodarTesteEquilibrio());
+  const a25 = simular({ rendaAnual: 72000 }, CONFIG_2025);
+  resultados.push({
+    cenario: '23) R$ 72.000/ano em 2025 (sem a redução da Lei 15.270)',
+    esperado: '4986.22', obtido: String(a25.imposto), ok: Math.abs(a25.imposto - 4986.22) < 0.015
+  });
   resultados.push(...rodarTestesMensais());
   resultados.push(rodarTesteWhatsApp());
   if (typeof console !== 'undefined' && console.table) console.table(resultados);
