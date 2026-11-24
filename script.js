@@ -598,6 +598,48 @@ function limparCampos() {
   $$('#campos-despesas input.contador-valor').forEach((i) => { i.value = '0'; });
 }
 
+/* ---------- Simulação salva no aparelho (F5 não perde) ----------
+   Fica só no localStorage deste navegador; nada é enviado a servidor. */
+const CHAVE_SIMULACAO = 'ir-simulacao-v1';
+const CAMPOS_SALVOS = ['renda', 'dependentes', 'saude', 'educacao', 'previdencia', 'pensao', 'irrf'];
+
+function salvarSimulacao() {
+  try {
+    const dados = { periodo: estado.periodo };
+    CAMPOS_SALVOS.forEach((c) => { dados[c] = estado[c]; });
+    localStorage.setItem(CHAVE_SIMULACAO, JSON.stringify(dados));
+  } catch (e) { /* modo privado ou armazenamento cheio: segue sem salvar */ }
+}
+
+function apagarSimulacaoSalva() {
+  try { localStorage.removeItem(CHAVE_SIMULACAO); } catch (e) { /* ignora */ }
+}
+
+function restaurarSimulacao() {
+  let dados;
+  try { dados = JSON.parse(localStorage.getItem(CHAVE_SIMULACAO) || 'null'); } catch (e) { return; }
+  if (!dados || typeof dados !== 'object') return;
+  const limiteValor = Math.pow(10, CONFIG.limites.maxDigitosValor) / 100;
+  CAMPOS_SALVOS.forEach((c) => {
+    let v = Number(dados[c]);
+    if (!Number.isFinite(v) || v < 0) v = 0;
+    if (c === 'dependentes') v = Math.min(CONFIG.limites.maxDependentes, Math.floor(v));
+    else v = Math.min(limiteValor, arredondar(v));
+    estado[c] = v;
+  });
+  if (dados.periodo === 'mensal' || dados.periodo === 'anual') {
+    estado.periodo = dados.periodo;
+    estado.visao = dados.periodo;
+    $('input[name="periodo"][value="' + dados.periodo + '"]').checked = true;
+  }
+  $('#renda').value = estado.renda > 0 ? numeroBR(estado.renda) : '';
+  CAMPOS_DESPESAS.filter((c) => c.tipo === 'moeda').forEach((c) => {
+    $('#f-' + c.id).value = estado[c.id] > 0 ? numeroBR(estado[c.id]) : '';
+  });
+  $('#f-' + CAMPO_IRRF.id).value = estado.irrf > 0 ? numeroBR(estado.irrf) : '';
+  $('#f-dependentes').value = String(estado.dependentes);
+}
+
 /* ---------- Navegação entre os passos ---------- */
 function irParaPasso(n, { foco = true } = {}) {
   estado.passo = n;
@@ -633,6 +675,7 @@ function textoDaPrevia() {
 }
 
 function renderizarPrevias() {
+  salvarSimulacao();
   const html = textoDaPrevia();
   ['#previa-1', '#previa-2'].forEach((id) => {
     const el = $(id);
@@ -1013,6 +1056,7 @@ function desbloquear() {
 }
 
 function refazer() {
+  apagarSimulacaoSalva();
   Object.assign(estado, {
     periodo: 'mensal', visao: 'mensal', renda: 0,
     dependentes: 0, saude: 0, educacao: 0, previdencia: 0, pensao: 0, irrf: 0
@@ -1419,6 +1463,7 @@ function iniciar() {
   iniciarPasso1();
   iniciarPasso2();
   iniciarFerramentas();
+  restaurarSimulacao();
   atualizarTextosDoPeriodo();
   irParaPasso(1, { foco: false });
   window.scrollTo(0, 0);
