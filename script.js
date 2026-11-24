@@ -139,7 +139,15 @@ const CONFIG = {
      permitirDemo: com true, abrir o site com ?demo=1 mostra o resultado liberado,
      só para você testar. Deixe false em produção. */
   // TODO(Gabriel): colar o link de checkout em linkPagamento (ainda vazio de propósito).
-  plano: { precoMensal: 5, linkPagamento: '', permitirDemo: false }
+  plano: { precoMensal: 5, linkPagamento: '', permitirDemo: false },
+
+  /* Analytics leve, sem cookies e sem dados pessoais (GoatCounter).
+     goatcounterCodigo: o nome do seu site no GoatCounter. Crie a conta em
+     https://www.goatcounter.com e coloque aqui só o código (ex.: 'calcula-ir',
+     que vira https://calcula-ir.goatcounter.com). Vazio = analytics desligado.
+     Atenção: o plano grátis do GoatCounter é para uso NÃO comercial; como o site
+     cobra assinatura, confira os termos ou use o plano pago. */
+  analytics: { goatcounterCodigo: '' }
 };
 
 /* Regras do ANO-CALENDÁRIO 2025 (declaração entregue em 2026), só para o
@@ -1716,7 +1724,37 @@ function iniciarReverso() {
   });
 }
 
+/* ---------- Analytics sem cookies (GoatCounter) ----------
+   Só carrega se CONFIG.analytics.goatcounterCodigo estiver preenchido. */
+const EVENTOS_ANALYTICS = {
+  'btn-zap': 'compartilhar-whatsapp', 'btn-compartilhar': 'compartilhar',
+  'btn-imagem': 'baixar-imagem', 'btn-desbloquear': 'clique-desbloquear'
+};
+
+function registrarEvento(nome) {
+  try {
+    if (window.goatcounter && typeof window.goatcounter.count === 'function') {
+      window.goatcounter.count({ path: 'evento/' + nome, title: nome, event: true });
+    }
+  } catch (e) { /* analytics nunca pode quebrar o site */ }
+}
+
+function iniciarAnalytics() {
+  const codigo = (CONFIG.analytics && CONFIG.analytics.goatcounterCodigo || '').trim();
+  if (!/^[a-z0-9-]+$/i.test(codigo)) return;
+  const tag = document.createElement('script');
+  tag.async = true;
+  tag.src = 'https://gc.zgo.at/count.js';
+  tag.setAttribute('data-goatcounter', 'https://' + codigo + '.goatcounter.com/count');
+  document.head.appendChild(tag);
+  document.addEventListener('click', (ev) => {
+    const botao = ev.target.closest('button');
+    if (botao && EVENTOS_ANALYTICS[botao.id]) registrarEvento(EVENTOS_ANALYTICS[botao.id]);
+  });
+}
+
 function iniciar() {
+  iniciarAnalytics();
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('sw.js').catch(() => { /* offline fica para a próxima */ });
