@@ -409,3 +409,10 @@ a { color: var(--azul-700); }
 .periodo.tres { grid-template-columns: 1fr 1fr 1fr; }
 fieldset.campo { border: 1px solid var(--borda); }
 .legenda-campo { padding: 0 6px; }
+
+/* ---------- Perguntas frequentes ---------- */
+.faq { max-width: 560px; margin: 24px auto 0; padding: 0 16px; }
+.faq h2 { font-size: 1.125rem; color: var(--azul-900); margin: 0 0 8px; }
+.faq details { border-bottom: 1px solid var(--borda); padding: 10px 0; }
+.faq summary { cursor: pointer; font-weight: 600; color: var(--azul-900); }
+.faq details p { margin: 8px 0 0; color: var(--texto-suave); font-size: .9375rem; }
