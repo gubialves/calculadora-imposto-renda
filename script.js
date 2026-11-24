@@ -1199,6 +1199,55 @@ function iniciarFerramentas() {
   iniciarMei();
 }
 
+/* ---------- Compartilhar as ferramentas grátis ----------
+   Texto genérico, sem os valores da pessoa. */
+const TEXTOS_FERRAMENTAS = {
+  '#rev-saida': 'Descobri quanto meu salário bruto precisa ser para chegar no líquido que eu quero, no Calcula IR.',
+  '#df-saida': 'Vi quanto cai de INSS e Imposto de Renda no meu 13º e nas férias, no Calcula IR.',
+  '#pj-saida': 'Calculei quanto preciso faturar como PJ para empatar com a CLT, no Calcula IR.',
+  '#mei-saida': 'Vi quanto sobra do faturamento do MEI depois do DAS, no Calcula IR.',
+  '#cl-saida': 'Calculei meu carnê-leão de autônomo no Calcula IR.'
+};
+
+async function compartilharTexto(texto) {
+  const url = window.location.href.split('#')[0];
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: 'Calcula IR', text: texto, url });
+      return;
+    } catch (e) {
+      if (e && e.name === 'AbortError') return;
+    }
+  }
+  try {
+    await navigator.clipboard.writeText(`${texto} ${url}`);
+    avisoRapido('Copiado! Agora é só colar onde quiser.');
+  } catch (e) {
+    avisoRapido('Não consegui copiar automaticamente. Tente de novo ou copie o endereço da página.');
+  }
+}
+
+/** Põe os botões de WhatsApp e compartilhar embaixo do resultado da ferramenta. */
+function adicionarCompartilhar(saidaId) {
+  const texto = TEXTOS_FERRAMENTAS[saidaId];
+  const saida = $(saidaId);
+  if (!texto || !saida) return;
+  const div = document.createElement('div');
+  div.className = 'resultado-acoes';
+  div.innerHTML = `
+    <button type="button" class="btn btn-zap" data-acao="zap">
+      <svg class="icone" aria-hidden="true"><use href="#i-whatsapp"/></svg>Mandar no WhatsApp
+    </button>
+    <button type="button" class="btn btn-secundario" data-acao="compartilhar">
+      <svg class="icone" aria-hidden="true"><use href="#i-share"/></svg>Compartilhar
+    </button>`;
+  div.querySelector('[data-acao="zap"]').addEventListener('click', () => {
+    window.open(urlWhatsApp(`${texto} ${window.location.href.split('#')[0]}`), '_blank', 'noopener,noreferrer');
+  });
+  div.querySelector('[data-acao="compartilhar"]').addEventListener('click', () => compartilharTexto(texto));
+  saida.appendChild(div);
+}
+
 /* ---------- Ferramenta: MEI ---------- */
 function renderizarMei(r) {
   const nomeAtividade = { comercio: 'comércio/indústria', servicos: 'serviços', ambos: 'comércio e serviços' }[r.atividade];
@@ -1219,6 +1268,7 @@ function renderizarMei(r) {
       ${avisoLimite}
       <p class="dica">O DAS já inclui o INSS, que garante aposentadoria por idade, auxílio-doença e salário-maternidade. Esta conta não inclui outros custos do negócio (material, internet, contador).</p>
     </section>`;
+  adicionarCompartilhar('#mei-saida');
 }
 
 function iniciarMei() {
@@ -1258,6 +1308,7 @@ function renderizarCltPJ(r) {
       </div>
       <p class="dica">Acima desse valor, o PJ passa a render mais que a CLT. A conta não inclui benefícios (vale-refeição, plano de saúde) nem custo de contador, e o PJ não tem 13º, férias pagas, FGTS nem seguro-desemprego — o preço da estabilidade é seu.</p>
     </section>`;
+  adicionarCompartilhar('#pj-saida');
 }
 
 function iniciarCltPJ() {
@@ -1336,6 +1387,7 @@ function renderizarDecimoFerias(salario, dependentes) {
       </div>
       <p class="dica">Conta com o gozo integral das férias. Vender 1/3 (abono pecuniário) muda os valores: o abono e o terço sobre ele não têm descontos.</p>
     </section>`;
+  adicionarCompartilhar('#df-saida');
 }
 
 function iniciarDecimoFerias() {
@@ -1383,6 +1435,7 @@ function renderizarReverso(resultado) {
       </div>
       <p class="dica">Estimativa para salário CLT em 2026, sem dependentes${resultado.descontos.dependentes > 0 ? ' além dos ' + resultado.descontos.dependentes + ' informados' : ''}. Não entram outros descontos do contracheque, como vale-transporte e plano de saúde.</p>
     </section>`;
+  adicionarCompartilhar('#rev-saida');
 }
 
 function iniciarReverso() {
