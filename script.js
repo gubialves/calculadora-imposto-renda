@@ -138,6 +138,7 @@ const CONFIG = {
      Mercado Pago, Stripe, Hotmart etc.). Enquanto estiver vazio, o botão só avisa.
      permitirDemo: com true, abrir o site com ?demo=1 mostra o resultado liberado,
      só para você testar. Coloque false antes de publicar. */
+  // TODO(Gabriel): colar o link de checkout em linkPagamento (ainda vazio de propósito).
   plano: { precoMensal: 5, linkPagamento: '', permitirDemo: true }
 };
 
@@ -622,8 +623,8 @@ function irParaPasso(n, { foco = true } = {}) {
 
 /* ---------- Prévia em tempo real (passos 1 e 2) ---------- */
 function textoDaPrevia() {
-  // A estimativa é parte do resultado pago: só aparece para quem tem o plano.
-  if (!estado.assinante || !(estado.renda > 0)) return '';
+  // A estimativa do imposto é grátis; só o detalhe (comparativo, restituição) é pago.
+  if (!(estado.renda > 0)) return '';
   const r = calcularDoEstado();
   const mensal = estado.periodo === 'mensal';
   const por = mensal ? 'por mês' : 'por ano';
@@ -801,22 +802,25 @@ function htmlOpcao(chave, nome, opcao, r, divisor, textoDesconto, extra) {
 }
 
 function renderizarResultado(manterFoco = false) {
-  // Sem o plano, a tela é montada com um EXEMPLO fictício (nunca com os números
-  // da pessoa) e fica embaçada. Assim os valores reais não ficam no código da página.
+  // GRÁTIS: imposto estimado, gráfico, alíquotas e botões de compartilhar.
+  // PAGO: detalhe (comparativo simplificada x completa, ponto de equilíbrio,
+  // restituição). Sem o plano, essa parte é montada com um EXEMPLO fictício
+  // (nunca com os números da pessoa) e fica embaçada. Assim os valores reais
+  // do detalhe não ficam no código da página.
   const bloqueado = !estado.assinante;
-  const r = bloqueado
+  const r = calcularDoEstado();
+  const rd = bloqueado
     ? simular({ rendaAnual: 84000, dependentes: 1, saude: 6000 })
-    : calcularDoEstado();
-  const mensal = bloqueado ? true : estado.visao === 'mensal';
+    : r;
+  const mensal = estado.visao === 'mensal';
   const divisor = mensal ? 12 : 1;
   const unidade = mensal ? 'por mês' : 'por ano';
   const imposto = r.imposto / divisor;
   const sobra = r.sobra / divisor;
-  const semDespesas = r.deducoes.total === 0;
+  
 
-  // Bloqueado: o título do exemplo é só texto (o <h1> verdadeiro está no cartão de desbloqueio).
-  const abreTitulo = bloqueado ? '<p class="headline">' : '<h1 id="t3" class="headline" tabindex="-1">';
-  const fechaTitulo = bloqueado ? '</p>' : '</h1>';
+  const abreTitulo = '<h1 id="t3" class="headline" tabindex="-1">';
+  const fechaTitulo = '</h1>';
   const titulo = r.imposto <= 0
     ? `${abreTitulo}Boa notícia: <span class="valor-destaque verde">você não pagará imposto</span>${fechaTitulo}
        <p class="headline-sub">Com os dados informados, o imposto estimado para ${CONFIG.anoCalendario} é <strong>R$ 0,00</strong>.</p>`
@@ -824,18 +828,21 @@ function renderizarResultado(manterFoco = false) {
        <p class="headline-sub">Estimativa para o ano-calendário ${CONFIG.anoCalendario}, calculada no acerto anual (declaração de ${CONFIG.exercicio}).</p>`;
 
   // Comparativo simplificada x completa
-  const textoSimp = `Desconto automático de 20% da renda (no máximo ${moeda(CONFIG.simplificado.tetoAnual / divisor)} ${unidade}), sem precisar comprovar nada: <strong>${moeda(r.simplificada.deducao / divisor)}</strong>`;
+  const divisorD = bloqueado ? 12 : divisor;
+  const unidadeD = bloqueado ? 'por mês' : unidade;
+  const semDespesas = rd.deducoes.total === 0;
+  const textoSimp = `Desconto automático de 20% da renda (no máximo ${moeda(CONFIG.simplificado.tetoAnual / divisorD)} ${unidadeD}), sem precisar comprovar nada: <strong>${moeda(rd.simplificada.deducao / divisorD)}</strong>`;
   const textoComp = semDespesas
     ? 'Você não informou despesas, então não há o que abater.'
-    : `Soma das suas despesas que abatem imposto: <strong>${moeda(r.completa.deducao / divisor)}</strong>`;
-  const extraComp = r.deducoes.educacaoExcedente > 0
+    : `Soma das suas despesas que abatem imposto: <strong>${moeda(rd.completa.deducao / divisorD)}</strong>`;
+  const extraComp = rd.deducoes.educacaoExcedente > 0
     ? '<p class="opcao-detalhe">Seus gastos com educação passaram do limite, então usamos o valor máximo permitido.</p>'
     : '';
 
-  const nomeMelhor = r.melhor === 'completa' ? 'declaração completa' : 'declaração simplificada';
+  const nomeMelhor = rd.melhor === 'completa' ? 'declaração completa' : 'declaração simplificada';
   let linhaEconomia = '<p class="economia">As duas opções dão o mesmo valor de imposto.</p>';
-  if (r.melhor !== 'empate') {
-    linhaEconomia = `<p class="economia">Escolhendo a ${nomeMelhor}, você paga <strong>${moeda(r.economia / divisor)}</strong> a menos ${unidade}.</p>`;
+  if (rd.melhor !== 'empate') {
+    linhaEconomia = `<p class="economia">Escolhendo a ${nomeMelhor}, você paga <strong>${moeda(rd.economia / divisorD)}</strong> a menos ${unidadeD}.</p>`;
   }
 
   // Faixas
@@ -852,7 +859,7 @@ function renderizarResultado(manterFoco = false) {
   // Ponto de equilíbrio: quando a pessoa ainda está melhor na simplificada,
   // mostra a partir de quanto de dedução a completa passaria a compensar.
   let linhaEquilibrio = '';
-  if (!bloqueado && r.melhor !== 'completa') {
+  if (!bloqueado && rd.melhor !== 'completa') {
     const pe = pontoDeEquilibrio(r.rendaAnual);
     if (pe !== null && pe > r.completa.deducao) {
       linhaEquilibrio = `<p class="dica">Vale guardar recibo? Se os seus gastos que abatem imposto passarem de <strong>${moeda(pe / divisor)}</strong> ${unidade}, a declaração completa passa a dar imposto menor que a simplificada. Saúde entra sem limite; educação tem teto por pessoa.</p>`;
@@ -887,7 +894,17 @@ function renderizarResultado(manterFoco = false) {
     </section>`;
   }
 
-  const fieldsetVisao = bloqueado ? '' : `
+  // Bloqueado: se a pessoa informou o IRRF, mostra só um bloco-exemplo embaçado.
+  if (bloqueado && r.retido > 0) {
+    blocoRestituicao = `
+    <section class="bloco bloco-restituicao" aria-labelledby="h-rest">
+      <h2 class="bloco-titulo" id="h-rest">Restituição ou imposto a pagar</h2>
+      <p class="restituicao-linha">Você deve <strong class="verde-texto">receber de volta cerca de R$ 1.234,56</strong> por ano</p>
+      <p class="dica">Já descontaram R$ 5.678,90 do seu salário. A diferença volta para você na restituição.</p>
+    </section>`;
+  }
+
+  const fieldsetVisao = `
     <fieldset class="periodo visao">
       <legend class="sr-only">Mostrar valores por</legend>
       <label class="segmento"><input type="radio" name="visao" value="mensal"${mensal ? ' checked' : ''}><span>Por mês</span></label>
@@ -896,20 +913,17 @@ function renderizarResultado(manterFoco = false) {
 
   const preco = moeda(CONFIG.plano.precoMensal);
   const cartaoDesbloqueio = `
-    <div class="trava-card" role="region" aria-labelledby="t3">
+    <div class="trava-card" role="region" aria-labelledby="t3-trava">
       <svg class="icone trava-icone" aria-hidden="true"><use href="#i-lock"/></svg>
-      <h1 id="t3" class="trava-titulo" tabindex="-1">Seu resultado está pronto</h1>
-      <p>Veja quanto você paga de imposto, qual declaração compensa mais e suas alíquotas.</p>
+      <h2 id="t3-trava" class="trava-titulo">Quer o detalhe?</h2>
+      <p>Veja qual declaração compensa mais (simplificada ou completa), a partir de quanto de recibo vale a completa e quanto você recebe de restituição.</p>
       <p class="trava-preco"><strong>${preco}</strong> por mês</p>
       <button type="button" class="btn btn-primario" id="btn-desbloquear">Desbloquear por ${preco}/mês</button>
     </div>`;
 
   $('#resultado').innerHTML = `
-    <div class="trava">
-    <div class="resultado-conteudo${bloqueado ? ' bloqueado' : ''}"${bloqueado ? ' aria-hidden="true" inert' : ''}>
     ${titulo}
     ${fieldsetVisao}
-    ${blocoRestituicao}
 
     <section class="bloco" aria-labelledby="h-rosca">
       <h2 class="bloco-titulo" id="h-rosca">Para onde vai o seu dinheiro</h2>
@@ -921,16 +935,6 @@ function renderizarResultado(manterFoco = false) {
         </ul>
       </div>
       <p class="dica">Considera só o imposto de renda sobre o valor bruto informado. Outros descontos, como INSS, não entram nesta conta.</p>
-    </section>
-
-    <section class="bloco" aria-labelledby="h-comp">
-      <h2 class="bloco-titulo" id="h-comp">Declaração simplificada ou completa?</h2>
-      <div class="comparativo">
-        ${htmlOpcao('simplificada', 'Declaração simplificada', r.simplificada, r, divisor, textoSimp)}
-        ${htmlOpcao('completa', 'Declaração completa', r.completa, r, divisor, textoComp, extraComp)}
-      </div>
-      ${linhaEconomia}
-      ${linhaEquilibrio}
     </section>
 
     <section class="bloco" aria-labelledby="h-aliq">
@@ -951,12 +955,26 @@ function renderizarResultado(manterFoco = false) {
     </section>
 
     ${aviso}
+
+    <div class="trava">
+    <div class="resultado-conteudo${bloqueado ? ' bloqueado' : ''}"${bloqueado ? ' aria-hidden="true" inert' : ''}>
+    ${blocoRestituicao}
+
+    <section class="bloco" aria-labelledby="h-comp">
+      <h2 class="bloco-titulo" id="h-comp">Declaração simplificada ou completa?</h2>
+      <div class="comparativo">
+        ${htmlOpcao('simplificada', 'Declaração simplificada', rd.simplificada, rd, divisorD, textoSimp)}
+        ${htmlOpcao('completa', 'Declaração completa', rd.completa, rd, divisorD, textoComp, extraComp)}
+      </div>
+      ${linhaEconomia}
+      ${linhaEquilibrio}
+    </section>
     </div>
     ${bloqueado ? cartaoDesbloqueio : ''}
     </div>
 
     <div class="resultado-acoes">
-      ${bloqueado ? '' : `<button type="button" class="btn btn-zap" id="btn-zap">
+      <button type="button" class="btn btn-zap" id="btn-zap">
         <svg class="icone" aria-hidden="true"><use href="#i-whatsapp"/></svg>Mandar no WhatsApp
       </button>
       <button type="button" class="btn btn-primario" id="btn-compartilhar">
@@ -964,7 +982,7 @@ function renderizarResultado(manterFoco = false) {
       </button>
       <button type="button" class="btn btn-secundario" id="btn-imagem">
         <svg class="icone" aria-hidden="true"><use href="#i-image"/></svg>Baixar imagem pra stories
-      </button>`}
+      </button>
       <button type="button" class="btn btn-secundario" id="btn-refazer">
         <svg class="icone" aria-hidden="true"><use href="#i-refresh"/></svg>Refazer simulação
       </button>
